@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# 临时文件
+.tmp/
+tmp/
+
+# 环境变量（含数据库密码、JWT 密钥、API Key，绝不能提交）
+.env
+.env.*
+!.env.example
+server/.env
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
