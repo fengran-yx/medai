@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- 1. 单元测试：规则引擎（无需数据库，最快反馈） ----------
+  unit:
+    name: 单元测试 · 规则引擎
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: 安装后端依赖
+        working-directory: server
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: 语法检查
+        working-directory: server
+        run: |
+          for f in $(find src -name '*.js'); do node --check "$f"; done
+
+      - name: 运行单元测试
+        working-directory: server
+        run: node --test test/*.test.mjs
+
+  # ---------- 2. 集成测试：MySQL + 建表 + 灌数据 + 接口冒烟 ----------
+  integration:
+    name: 集成测试 · API 冒烟
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: medai
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      PORT: 8801
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: medai
+      JWT_SECRET: ci-only-secret
+      DEEPSEEK_API_KEY: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: 安装后端依赖
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+
+      - name: 初始化数据库并写入演示数据
+        working-directory: server
+        run: |
+          node scripts/init-db.js
+          node scripts/seed.js
+
+      - name: 校验数据量
+        run: |
+          mysql -h127.0.0.1 -uroot -proot medai -N -e "
+            SELECT CONCAT('tables=', COUNT(*)) FROM information_schema.tables WHERE table_schema='medai';
+            SELECT CONCAT('records=', COUNT(*)) FROM medical_records;
+            SELECT CONCAT('qc=', COUNT(*)) FROM qc_reports;
+          "
+
+      - name: 启动服务并冒烟测试
+        working-directory: server
+        run: |
+          node src/index.js > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8801/api/health > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+
+          echo "--- health ---"
+          curl -fsS http://127.0.0.1:8801/api/health
+
+          echo "--- login ---"
+          TOKEN=$(curl -fsS -X POST http://127.0.0.1:8801/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"quality","password":"qc123456"}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(!j.data||!j.data.token){console.error('no token');process.exit(1)}console.log(j.data.token)})")
+          echo "token length: ${#TOKEN}"
+
+          echo "--- dashboard ---"
+          curl -fsS http://127.0.0.1:8801/api/dashboard/overview -H "Authorization: Bearer $TOKEN"
+
+          echo "--- records ---"
+          curl -fsS "http://127.0.0.1:8801/api/records?page=1&size=3" -H "Authorization: Bearer $TOKEN" > /dev/null
+
+          echo "--- run AI QC on record 1 ---"
+          curl -fsS -X POST http://127.0.0.1:8801/api/records/1/qc -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||typeof j.data.score!=='number'){console.error('bad qc response');process.exit(1)}console.log('qc score:',j.data.score,'level:',j.data.level)})"
+
+          echo "--- ai diagnosis ---"
+          curl -fsS -X POST http://127.0.0.1:8801/api/ai/diagnosis \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"symptoms":"发热伴咳嗽咳黄痰 3 天","exams":"WBC 11.2","age":35,"gender":"男"}' > /dev/null
+
+          echo "--- unauthorized check ---"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8801/api/records)
+          test "$CODE" = "401" || { echo "expected 401, got $CODE"; exit 1; }
+
+          kill $(cat /tmp/server.pid) || true
+
+      - name: 失败时输出服务日志
+        if: failure()
+        run: cat /tmp/server.log
+
+  # ---------- 3. 前端：类型检查 + 生产构建 ----------
+  frontend:
+    name: 前端 · 类型检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      - name: 类型检查 + 构建
+        working-directory: web
+        run: npm run build
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 3
