@@ -7,7 +7,7 @@
  *  - 真上规模时把 search() 换成 pgvector / Milvus 即可，接口不变。
  */
 
-import { tokenize, termFreq } from './tokenize.js';
+import { tokenize, termFreq, expandQuery } from './tokenize.js';
 
 const K1 = 1.5;
 const B = 0.75;
@@ -73,11 +73,22 @@ export function cosine(a, b) {
 
 /**
  * 混合检索
+ * @param {object} index buildIndex 产物
+ * @param {string} query 用户问题
+ * @param {number} topK 返回条数
+ * @param {{rewrite?: boolean, rerank?: boolean}} opts rewrite=同义扩展，rerank=词覆盖重排
  * @returns [{ id, docId, title, content, score, bm25, cosine }]
  */
-export function search(index, query, topK = 5) {
-  const qTokens = tokenize(query);
+export function search(index, query, topK = 5, opts = {}) {
+  const { rewrite = true, rerank = true } = opts;
+  const baseQuery = String(query || '');
+  const searchQuery = rewrite ? expandQuery(baseQuery) : baseQuery;
+
+  const qTokens = tokenize(searchQuery);
   if (!qTokens.length || !index.docs.length) return [];
+
+  // 原始问题的词项：重排时用它衡量「真正命中多少」，避免同义扩展把分数灌水
+  const baseTokens = [...new Set(tokenize(baseQuery).filter((t) => t.length > 1))];
 
   const qtf = termFreq(qTokens);
   const qVec = Object.create(null);
@@ -95,7 +106,14 @@ export function search(index, query, topK = 5) {
     const hit = qTokens.filter((t) => titleTokens.includes(t) && t.length > 1).length;
     const titleBoost = Math.min(0.25, hit * 0.08);
     const score = 0.65 * bm25Norm + 0.35 * cos + titleBoost;
-    return { ...doc, bm25, cosine: cos, score };
+
+    // 重排信号：原始问题的不同词项在该块中出现了多少
+    const coverage = baseTokens.length
+      ? baseTokens.filter((t) => doc.tf[t]).length / baseTokens.length
+      : 0;
+    const finalScore = rerank ? 0.75 * score + 0.25 * coverage : score;
+
+    return { ...doc, bm25, cosine: cos, coverage, score: finalScore, rawScore: score };
   });
 
   return scored
@@ -110,5 +128,6 @@ export function search(index, query, topK = 5) {
       score: Math.round(d.score * 1000) / 1000,
       bm25: Math.round(d.bm25 * 100) / 100,
       cosine: Math.round(d.cosine * 1000) / 1000,
+      coverage: Math.round(d.coverage * 100) / 100,
     }));
 }

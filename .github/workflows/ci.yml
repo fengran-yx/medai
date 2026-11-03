@@ -95,6 +95,12 @@ jobs:
             SELECT CONCAT('qc=', COUNT(*)) FROM qc_reports;
           "
 
+      - name: RAG 检索评测（Recall@3 门槛）
+        working-directory: server
+        env:
+          EVAL_THRESHOLD: '0.9'
+        run: node scripts/eval-rag.js --ci
+
       - name: 启动服务并冒烟测试
         working-directory: server
         run: |

@@ -11,6 +11,7 @@
     "db:init": "node scripts/init-db.js",
     "db:seed": "node scripts/seed.js",
     "kb:seed": "node scripts/seed-kb.js",
+    "eval:rag": "node scripts/eval-rag.js",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {
