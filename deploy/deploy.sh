@@ -73,16 +73,22 @@ echo "   .env 已生成（权限 600），数据库密码：${DB_PASS}"
 
 log "4/8 安装依赖并初始化数据"
 cd "$APP_DIR/server"
-npm ci --omit=dev --no-audit --no-fund 2>/dev/null || npm install --omit=dev --no-audit --no-fund
+npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmmirror.com 2>/dev/null || npm install --omit=dev --no-audit --no-fund --registry=https://registry.npmmirror.com
 node scripts/init-db.js
 node scripts/seed.js
+node scripts/seed-kb.js
+node scripts/eval-rag.js --ci || echo "   [警告] RAG 评测未达标，请检查知识库"
 
-log "5/8 构建前端"
-cd "$APP_DIR/web"
-npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund
-TEMP=/tmp/medai-build TMP=/tmp/medai-build npm run build:only
-[[ -f "$APP_DIR/web/dist/index.html" ]] || die "前端构建产物缺失"
-echo "   dist 产物 $(du -sh dist | cut -f1)"
+log "5/8 前端产物"
+if [ -f "$APP_DIR/web/dist/index.html" ]; then
+  echo "  已有构建产物，跳过构建（本机构建后随包上传，避免小内存服务器 OOM）"
+else
+  cd "$APP_DIR/web"
+  npm ci --no-audit --no-fund --registry=https://registry.npmmirror.com 2>/dev/null || npm install --no-audit --no-fund --registry=https://registry.npmmirror.com
+  TEMP=/tmp/medai-build TMP=/tmp/medai-build npm run build:only
+  [[ -f "$APP_DIR/web/dist/index.html" ]] || die "前端构建产物缺失"
+fi
+echo "   dist 产物 $(du -sh "$APP_DIR/web/dist" | cut -f1)"
 
 log "6/8 注册 systemd 服务"
 cat > /etc/systemd/system/medai.service <<UNIT
