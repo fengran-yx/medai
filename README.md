@@ -13,6 +13,9 @@
 
 **技术栈**：Vue 3 + TypeScript + Vite + Element Plus + ECharts ｜ Node.js + Express ｜ MySQL 8.0 ｜ DeepSeek 大模型
 
+**在线演示**：🔗 **http://47.119.38.7**（阿里云 ECS · Ubuntu 22.04 · Nginx 反代 · systemd 常驻）
+账号：`quality / qc123456`（质控医师）、`doctor / doc123456`（临床医师）、`admin / admin123`（管理员）
+
 **状态**：核心功能可用 · CI 全绿（单测 + 集成冒烟 + 前端构建）· 含 36 份演示病历与完整部署脚本
 
 ![质控驾驶舱](docs/screenshots/dashboard.png)
