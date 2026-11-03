@@ -1,8 +1,19 @@
 # 智医质控 MedAI · AI 病历质控与辅助诊疗平台
 
+<p align="center">
+  <a href="https://github.com/fengran-yx/medai/actions/workflows/ci.yml"><img src="https://github.com/fengran-yx/medai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-brightgreen.svg" alt="License">
+  <img src="https://img.shields.io/badge/node-%3E%3D20-339933.svg" alt="Node">
+  <img src="https://img.shields.io/badge/vue-3.5-42b883.svg" alt="Vue">
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1.svg" alt="MySQL">
+  <img src="https://img.shields.io/badge/AI-DeepSeek-4B6BFB.svg" alt="DeepSeek">
+</p>
+
 > 面向医院病案质量的 AI 平台：自动识别病历缺项、逻辑矛盾、诊断与检查不符、术语不规范，给出四维度评分与整改建议；同时提供 AI 辅助诊断、医学问答、质控看板与审计留痕。
 
 **技术栈**：Vue 3 + TypeScript + Vite + Element Plus + ECharts ｜ Node.js + Express ｜ MySQL 8.0 ｜ DeepSeek 大模型
+
+**状态**：核心功能可用 · CI 全绿（单测 + 集成冒烟 + 前端构建）· 含 36 份演示病历与完整部署脚本
 
 ![质控驾驶舱](docs/screenshots/dashboard.png)
 
