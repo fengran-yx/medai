@@ -125,20 +125,20 @@ async function load() {
   const trendChart = getChart(trendRef.value);
   trendChart?.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: ['病历数', '平均质控分'], right: 0, top: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 11 } },
+    legend: { data: ['病历数（份）', '平均质控分（分）'], right: 0, top: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 11 } },
     grid: { left: 8, right: 8, top: 36, bottom: 4, containLabel: true },
     xAxis: { type: 'category', data: trend.map((t) => t.date), axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '份', splitLine: { lineStyle: { color: '#f1f5f9' } }, axisLabel: { color: '#94a3b8', fontSize: 11 } },
-      { type: 'value', name: '分', min: 50, max: 100, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11 } },
+      { type: 'value', splitLine: { lineStyle: { color: '#f1f5f9' } }, axisLabel: { color: '#94a3b8', fontSize: 11 } },
+      { type: 'value', min: 50, max: 100, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11 } },
     ],
     series: [
       {
-        name: '病历数', type: 'bar', barWidth: 16, data: trend.map((t) => t.records),
+        name: '病历数（份）', type: 'bar', barWidth: 16, data: trend.map((t) => t.records),
         itemStyle: { borderRadius: [5, 5, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#2ec4b0' }, { offset: 1, color: '#a7e8de' }]) },
       },
       {
-        name: '平均质控分', type: 'line', yAxisIndex: 1, smooth: true, symbolSize: 6,
+        name: '平均质控分（分）', type: 'line', yAxisIndex: 1, smooth: true, symbolSize: 6,
         data: trend.map((t) => t.avgScore ?? 0),
         lineStyle: { width: 2.5, color: '#0f8b7f' },
         itemStyle: { color: '#0f8b7f' },
