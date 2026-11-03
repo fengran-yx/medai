@@ -53,7 +53,7 @@
               <span class="tag-ai">✦ 最终答复</span>
               <span v-if="result.status === 'fallback'" class="muted">（规则编排兜底）</span>
             </div>
-            <div class="pre-wrap">{{ result.answer }}</div>
+            <div class="md-body" v-html="answerHtml"></div>
           </div>
         </div>
 
@@ -87,6 +87,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Promotion } from '@element-plus/icons-vue';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { agentApi, api } from '@/api';
 
 const goal = ref('');
@@ -103,6 +105,14 @@ const presets = [
 ];
 
 const modeLabel = computed(() => (remote.value ? '大模型编排' : '规则编排'));
+
+/** 把模型返回的 Markdown 渲染成 HTML（先消毒，防 XSS） */
+const answerHtml = computed(() => {
+  const raw = result.value?.answer || '';
+  if (!raw) return '';
+  const html = marked.parse(raw, { breaks: true, gfm: true }) as string;
+  return DOMPurify.sanitize(html);
+});
 
 const fmtArgs = (a: any) => {
   const s = JSON.stringify(a || {});
@@ -184,9 +194,35 @@ onMounted(async () => {
 .args { font-size: 11.5px; color: var(--ink-500); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .step-result { margin-top: 6px; font-size: 12.5px; color: var(--ink-700); line-height: 1.7; }
 
-.answer { background: var(--brand-50); border-radius: 10px; padding: 14px 16px; }
+.answer { background: var(--brand-50); border-radius: 10px; padding: 14px 18px; }
 .answer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.answer .pre-wrap { font-size: 13.5px; line-height: 1.9; color: var(--ink-900); }
+
+/* Markdown 渲染样式 */
+.md-body { font-size: 13.5px; line-height: 1.85; color: var(--ink-900); }
+.md-body :deep(h1), .md-body :deep(h2), .md-body :deep(h3) {
+  font-size: 14.5px; margin: 14px 0 8px; font-weight: 700; color: var(--ink-900);
+}
+.md-body :deep(h1) { font-size: 16px; }
+.md-body :deep(p) { margin: 6px 0; }
+.md-body :deep(ul), .md-body :deep(ol) { margin: 6px 0; padding-left: 20px; }
+.md-body :deep(li) { margin: 3px 0; }
+.md-body :deep(strong) { color: var(--brand-700); }
+.md-body :deep(table) {
+  width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; background: #fff;
+  border-radius: 8px; overflow: hidden;
+}
+.md-body :deep(th), .md-body :deep(td) {
+  border: 1px solid var(--line); padding: 6px 10px; text-align: left;
+}
+.md-body :deep(th) { background: #f4f8fa; font-weight: 600; }
+.md-body :deep(code) {
+  background: #fff; padding: 1px 6px; border-radius: 4px; font-size: 12px;
+  border: 1px solid var(--line);
+}
+.md-body :deep(blockquote) {
+  margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--brand-400);
+  background: #fff; color: var(--ink-700); border-radius: 0 6px 6px 0;
+}
 
 .side { max-height: 640px; overflow: auto; }
 .tool-item { margin-bottom: 12px; }

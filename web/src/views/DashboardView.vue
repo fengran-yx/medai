@@ -62,14 +62,14 @@
       <div class="card">
         <h3 class="card-title">最近质控动态</h3>
         <el-table :data="recent" size="small" height="300" @row-click="goRecord">
-          <el-table-column prop="patient_name" label="患者" width="90" />
-          <el-table-column prop="dept_name" label="科室" width="110" show-overflow-tooltip />
-          <el-table-column label="评分" width="90">
+          <el-table-column prop="patient_name" label="患者" width="78" show-overflow-tooltip />
+          <el-table-column prop="dept_name" label="科室" min-width="88" show-overflow-tooltip />
+          <el-table-column label="评分" width="72">
             <template #default="{ row }">
               <span class="score" :class="String(row.level).toLowerCase()">{{ row.score }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="doctor_name" label="医师" width="90" />
+          <el-table-column prop="doctor_name" label="医师" width="76" show-overflow-tooltip />
           <el-table-column label="时间" min-width="130">
             <template #default="{ row }">{{ fmt(row.created_at) }}</template>
           </el-table-column>

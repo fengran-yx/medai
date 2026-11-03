@@ -215,7 +215,7 @@ onMounted(async () => {
 .stat-item strong { font-size: 20px; }
 .stat-item span { font-size: 11.5px; color: var(--ink-500); }
 
-.doc-list { max-height: 520px; overflow: auto; }
+.doc-list { max-height: 430px; overflow-y: auto; padding-right: 6px; }
 .doc { display: flex; align-items: flex-start; gap: 8px; padding: 10px 8px; border-bottom: 1px solid var(--line); }
 .doc:last-child { border-bottom: none; }
 .doc-main { flex: 1; min-width: 0; }
