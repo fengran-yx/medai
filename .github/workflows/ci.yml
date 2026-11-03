@@ -85,6 +85,7 @@ jobs:
         run: |
           node scripts/init-db.js
           node scripts/seed.js
+          node scripts/seed-kb.js
 
       - name: 校验数据量
         run: |
@@ -128,6 +129,12 @@ jobs:
           curl -fsS -X POST http://127.0.0.1:8801/api/ai/diagnosis \
             -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
             -d '{"symptoms":"发热伴咳嗽咳黄痰 3 天","exams":"WBC 11.2","age":35,"gender":"男"}' > /dev/null
+
+          echo "--- knowledge base ask ---"
+          curl -fsS -X POST http://127.0.0.1:8801/api/kb/ask \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"question":"现病史应该怎么写才规范？","topK":3}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||!j.data.answer||j.data.sources.length===0){console.error('bad kb response',s.slice(0,200));process.exit(1)}console.log('kb sources:',j.data.sources.length,'model:',j.data.model)})"
 
           echo "--- unauthorized check ---"
           CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8801/api/records)

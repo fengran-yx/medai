@@ -12,6 +12,7 @@ import recordRouter from './routes/records.js';
 import aiRouter from './routes/ai.js';
 import dashboardRouter from './routes/dashboard.js';
 import { ruleRouter, logRouter, userRouter } from './routes/admin.js';
+import kbRouter from './routes/kb.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/rules', ruleRouter);
 app.use('/api/logs', logRouter);
 app.use('/api/users', userRouter);
+app.use('/api/kb', kbRouter);
 
 // 生产模式：托管前端构建产物
 const webDist = path.resolve(__dirname, '../../web/dist');

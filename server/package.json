@@ -9,7 +9,9 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:init": "node scripts/init-db.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "kb:seed": "node scripts/seed-kb.js",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

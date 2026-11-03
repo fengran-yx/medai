@@ -213,3 +213,53 @@ CREATE TABLE audit_logs (
   KEY idx_log_created (created_at),
   KEY idx_log_user (user_id)
 ) ENGINE=InnoDB COMMENT='操作审计日志';
+
+-- ============================================================
+-- RAG 知识库（检索增强生成）
+-- 设计：文档 → 切块 → 稀疏向量（词项权重 JSON）→ BM25 检索
+-- 不依赖外部 embedding 服务，离线可用；配了 Key 时由大模型做归纳
+-- ============================================================
+
+DROP TABLE IF EXISTS kb_chunks;
+DROP TABLE IF EXISTS kb_documents;
+
+CREATE TABLE kb_documents (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  title       VARCHAR(200) NOT NULL COMMENT '文档标题',
+  category    VARCHAR(50)  NOT NULL DEFAULT 'guideline' COMMENT 'guideline/qc_rule/policy/case',
+  source      VARCHAR(300) DEFAULT NULL COMMENT '来源说明',
+  content     MEDIUMTEXT   NOT NULL COMMENT '原文',
+  chunk_count INT          NOT NULL DEFAULT 0,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_kb_doc_category (category)
+) ENGINE=InnoDB COMMENT='知识库文档';
+
+CREATE TABLE kb_chunks (
+  id         BIGINT    NOT NULL AUTO_INCREMENT,
+  doc_id     BIGINT    NOT NULL,
+  seq        INT       NOT NULL DEFAULT 0 COMMENT '段序号',
+  content    TEXT      NOT NULL COMMENT '段落原文',
+  token_cnt  INT       NOT NULL DEFAULT 0,
+  embedding  JSON      DEFAULT NULL COMMENT '稀疏向量 {词项: 权重}',
+  created_at DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_kb_chunk_doc (doc_id),
+  CONSTRAINT fk_kb_chunk_doc FOREIGN KEY (doc_id) REFERENCES kb_documents (id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='知识库分块与向量';
+
+-- 问答记录（便于统计与评测）
+DROP TABLE IF EXISTS kb_qa_logs;
+
+CREATE TABLE kb_qa_logs (
+  id         BIGINT   NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT   DEFAULT NULL,
+  question   VARCHAR(500) NOT NULL,
+  answer     TEXT     DEFAULT NULL,
+  sources    JSON     DEFAULT NULL COMMENT '引用片段 [{docId,title,score}]',
+  model      VARCHAR(50) DEFAULT NULL,
+  latency_ms INT      DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_kb_qa_created (created_at)
+) ENGINE=InnoDB COMMENT='知识库问答记录';

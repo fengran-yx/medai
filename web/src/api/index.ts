@@ -88,3 +88,13 @@ export const api = {
   createUser: (data: any) => http.post('/users', data),
   updateUser: (id: number, data: any) => http.put(`/users/${id}`, data),
 };
+
+// ---------- 知识库（RAG） ----------
+export const kbApi = {
+  stats: () => http.get<never, { documents: number; chunks: number; questions: number }>('/kb/stats'),
+  documents: () => http.get<never, any[]>('/kb/documents'),
+  createDocument: (data: any) => http.post<never, any>('/kb/documents', data),
+  deleteDocument: (id: number) => http.delete(`/kb/documents/${id}`),
+  search: (q: string, topK = 5) => http.get<never, any[]>('/kb/search', { params: { q, topK } }),
+  ask: (question: string, topK = 5) => http.post<never, any>('/kb/ask', { question, topK }),
+};

@@ -168,3 +168,47 @@ export async function runChat(messages) {
     return { content: localChat(last), model: 'rule-engine(fallback)', source: 'rule-engine' };
   }
 }
+
+const RAG_SYSTEM = `你是医院质控科的知识库助手。请严格依据【参考资料】回答，遵守：
+1. 只使用资料中的信息，不要引入资料之外的知识；资料不足时明确说「知识库中没有相关规定」；
+2. 每个关键结论后用 [1][2] 标注来源编号；
+3. 回答用中文，条目化，不超过 300 字；
+4. 不给出具体药物剂量，涉及诊疗决策时提醒以临床指南和面诊为准。`;
+
+/** 抽取式兜底：无大模型时，直接从命中的片段里组织答案 */
+function extractiveAnswer(question, contexts) {
+  const top = contexts.slice(0, 2);
+  const lines = top.map((c, i) => `[${i + 1}] ${c.content.replace(/\n+/g, ' ').slice(0, 160)}`);
+  return `知识库中与「${question}」最相关的内容如下（未配置大模型，返回原文摘录）：\n\n${lines.join('\n\n')}\n\n如需自然语言归纳，请在 server/.env 配置 DEEPSEEK_API_KEY。`;
+}
+
+/**
+ * RAG 回答：把检索到的片段作为上下文交给大模型，要求带引用；失败降级为抽取式。
+ * @param {{question: string, contexts: Array<{title:string, content:string}>}} payload
+ */
+export async function runRagAnswer({ question, contexts }) {
+  const fallback = {
+    content: extractiveAnswer(question, contexts),
+    model: 'rag-extractive',
+    source: 'rule-engine',
+  };
+  if (!hasRemoteAI) return fallback;
+
+  const ctxText = contexts
+    .map((c, i) => `[${i + 1}] 《${c.title}》\n${c.content}`)
+    .join('\n\n');
+
+  try {
+    const content = await callDeepSeek(
+      [
+        { role: 'system', content: RAG_SYSTEM },
+        { role: 'user', content: `【参考资料】\n${ctxText}\n\n【问题】${question}` },
+      ],
+      { temperature: 0.2 },
+    );
+    return { content, model: config.deepseek.model, source: 'deepseek' };
+  } catch (err) {
+    console.warn('[ai] RAG 回答失败，降级抽取式:', err.message);
+    return fallback;
+  }
+}

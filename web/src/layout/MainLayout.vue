@@ -109,6 +109,7 @@ const menus = [
   { name: 'patients', title: '患者管理', icon: 'User' },
   { name: 'diagnosis', title: 'AI 辅助诊断', icon: 'FirstAidKit' },
   { name: 'assistant', title: 'AI 医学助手', icon: 'ChatDotRound' },
+  { name: 'kb', title: '知识库问答', icon: 'Collection' },
   { name: 'rules', title: '质控规则', icon: 'SetUp' },
   { name: 'logs', title: '操作日志', icon: 'Tickets' },
   ...(auth.isAdmin ? [{ name: 'users', title: '用户管理', icon: 'UserFilled' }] : []),
