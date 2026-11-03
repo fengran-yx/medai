@@ -263,3 +263,23 @@ CREATE TABLE kb_qa_logs (
   PRIMARY KEY (id),
   KEY idx_kb_qa_created (created_at)
 ) ENGINE=InnoDB COMMENT='知识库问答记录';
+
+-- ============================================================
+-- Agent 运行记录（工具调用链路留痕，便于回放与排错）
+-- ============================================================
+
+DROP TABLE IF EXISTS agent_runs;
+
+CREATE TABLE agent_runs (
+  id          BIGINT   NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT   DEFAULT NULL,
+  goal        VARCHAR(500) NOT NULL COMMENT '用户目标',
+  steps       JSON     DEFAULT NULL COMMENT '工具调用序列 [{step,tool,args,result,ms}]',
+  answer      TEXT     DEFAULT NULL COMMENT '最终答复',
+  model       VARCHAR(50) DEFAULT NULL,
+  status      VARCHAR(20) NOT NULL DEFAULT 'ok' COMMENT 'ok/fallback/failed',
+  duration_ms INT      DEFAULT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_agent_created (created_at)
+) ENGINE=InnoDB COMMENT='Agent 运行记录';

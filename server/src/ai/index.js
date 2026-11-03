@@ -212,3 +212,31 @@ export async function runRagAnswer({ question, contexts }) {
     return fallback;
   }
 }
+
+/**
+ * 通用 Chat Completions 调用：返回原始 message（含 tool_calls），供 Agent 使用。
+ * 与 callDeepSeek 的区别是不做 content 解析，保留完整结构。
+ */
+export async function callChatCompletions(payload, timeoutMs = 60_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.deepseek.apiKey}`,
+      },
+      body: JSON.stringify({ model: config.deepseek.model, ...payload }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`DeepSeek HTTP ${res.status} ${body.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data?.choices?.[0]?.message ?? null;
+  } finally {
+    clearTimeout(timer);
+  }
+}

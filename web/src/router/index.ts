@@ -20,6 +20,7 @@ const routes = [
       { path: 'diagnosis', name: 'diagnosis', component: () => import('@/views/DiagnosisView.vue'), meta: { title: 'AI 辅助诊断', icon: 'FirstAidKit' } },
       { path: 'assistant', name: 'assistant', component: () => import('@/views/AssistantView.vue'), meta: { title: 'AI 医学助手', icon: 'ChatDotRound' } },
       { path: 'kb', name: 'kb', component: () => import('@/views/KbView.vue'), meta: { title: '知识库问答', icon: 'Collection' } },
+      { path: 'agent', name: 'agent', component: () => import('@/views/AgentView.vue'), meta: { title: 'AI 质控助手', icon: 'MagicStick' } },
       { path: 'rules', name: 'rules', component: () => import('@/views/RulesView.vue'), meta: { title: '质控规则', icon: 'SetUp' } },
       { path: 'logs', name: 'logs', component: () => import('@/views/LogsView.vue'), meta: { title: '操作日志', icon: 'Tickets' } },
       { path: 'users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户管理', icon: 'UserFilled', roles: ['admin'] } },

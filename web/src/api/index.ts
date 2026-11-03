@@ -98,3 +98,11 @@ export const kbApi = {
   search: (q: string, topK = 5) => http.get<never, any[]>('/kb/search', { params: { q, topK } }),
   ask: (question: string, topK = 5) => http.post<never, any>('/kb/ask', { question, topK }),
 };
+
+// ---------- Agent（工具调用） ----------
+export const agentApi = {
+  tools: () => http.get<never, any[]>('/agent/tools'),
+  run: (goal: string) => http.post<never, any>('/agent/run', { goal }),
+  runs: (limit = 10) => http.get<never, any[]>('/agent/runs', { params: { limit } }),
+  runDetail: (id: number) => http.get<never, any>(`/agent/runs/${id}`),
+};
