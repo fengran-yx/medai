@@ -151,5 +151,8 @@ h2 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.4px; }
 
 @media (max-width: 900px) {
   .brand { display: none; }
+  .panel { padding: 24px 18px; }
+  .form-wrap { width: 100%; max-width: 380px; }
+  .stats { gap: 28px; }
 }
 </style>

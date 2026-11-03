@@ -1,6 +1,8 @@
 <template>
   <div class="layout">
-    <aside class="sidebar">
+    <div v-if="mobileOpen" class="mask" @click="mobileOpen = false" />
+    <aside class="sidebar" :class="{ open: mobileOpen }">
+      <button class="close-btn" @click="mobileOpen = false">✕</button>
       <div class="logo">
         <div class="logo-mark">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
@@ -38,6 +40,11 @@
     <div class="main">
       <header class="topbar">
         <div class="crumb">
+          <button class="menu-btn" @click="mobileOpen = true" aria-label="菜单">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
           <span class="crumb-root">工作台</span>
           <el-icon><ArrowRight /></el-icon>
           <span class="crumb-cur">{{ route.meta.title }}</span>
@@ -88,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
@@ -99,6 +106,8 @@ const route = useRoute();
 const router = useRouter();
 
 const aiRemote = ref(false);
+const mobileOpen = ref(false);
+watch(() => route.fullPath, () => { mobileOpen.value = false; });
 const pwdVisible = ref(false);
 const pwdLoading = ref(false);
 const pwdForm = ref({ oldPassword: '', newPassword: '' });
@@ -160,6 +169,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.mask { display: none; }
+.menu-btn { display: none; }
+.close-btn { display: none; }
+
 .layout { display: flex; height: 100%; }
 
 .sidebar {
@@ -231,4 +244,27 @@ onMounted(async () => {
 .user-sub { font-size: 11px; color: var(--ink-500); }
 
 .content { flex: 1; overflow: auto; }
+
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 232px; z-index: 1001;
+    transform: translateX(-100%); transition: transform .25s ease;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mask { display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 1000; }
+  .close-btn {
+    display: block; position: absolute; right: 10px; top: 10px;
+    width: 26px; height: 26px; border: none; border-radius: 6px;
+    background: rgba(255,255,255,.1); color: #cfe6e3; cursor: pointer; font-size: 12px;
+  }
+  .menu-btn {
+    display: grid; place-items: center; width: 30px; height: 30px; margin-right: 6px;
+    border: none; background: transparent; color: var(--ink-700); cursor: pointer; font-size: 16px;
+  }
+  .topbar { height: 54px; padding: 0 12px; }
+  .crumb-root { display: none; }
+  .crumb .el-icon { display: none; }
+  .user-meta { display: none; }
+  .content { -webkit-overflow-scrolling: touch; }
+}
 </style>
