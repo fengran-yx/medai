@@ -6,6 +6,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const config = {
   port: Number(process.env.PORT || 8801),
+  // 默认只监听本机，对外由 Nginx / Cloudflare 隧道转发，避免 8801 直接暴露
+  host: process.env.HOST || '127.0.0.1',
   jwtSecret: process.env.JWT_SECRET || 'dev-only-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   deepseek: {

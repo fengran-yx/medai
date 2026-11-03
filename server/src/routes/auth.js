@@ -2,10 +2,12 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { one, query } from '../db.js';
 import { signToken, requireAuth, audit } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 
 const router = Router();
 
-router.post('/login', async (req, res) => {
+// 同一 IP 15 分钟内最多 10 次登录尝试，防暴力破解
+router.post('/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: '登录尝试过于频繁，请 15 分钟后再试' }), async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ code: 400, message: '请输入用户名和密码' });

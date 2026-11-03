@@ -58,7 +58,7 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ code: 500, message: err.message || '服务器内部错误' });
 });
 
-app.listen(config.port, () => {
+app.listen(config.port, config.host, () => {
   console.log(`\n  智医质控 MedAI 服务已启动`);
   console.log(`  接口地址: http://127.0.0.1:${config.port}/api/health`);
   console.log(`  AI 引擎: ${hasRemoteAI ? `DeepSeek (${config.deepseek.model})` : '内置规则引擎（未配置 DEEPSEEK_API_KEY）'}\n`);
