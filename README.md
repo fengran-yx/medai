@@ -25,6 +25,10 @@
 | --- | --- |
 | ![病历详情](docs/screenshots/record-detail.png) | ![医学助手](docs/screenshots/assistant.png) |
 
+| 知识库问答（RAG） |
+| --- |
+| ![知识库](docs/screenshots/kb.png) |
+
 > 想按代码执行顺序逐步理解实现？看 **[docs/代码导读.md](docs/代码导读.md)**（从建表 SQL 到一次 AI 质控的完整链路）。
 >
 > 想快速看效果？**[讲解版演示视频](docs/智医质控-MedAI-讲解版.mp4)**（3 分 12 秒，中文配音，走完登录→质控→诊断→问答全流程）；也有 [1 分 21 秒纯字幕版](docs/演示视频.mp4)。
