@@ -13,8 +13,8 @@
 
 **技术栈**：Vue 3 + TypeScript + Vite + Element Plus + ECharts ｜ Node.js + Express ｜ MySQL 8.0 ｜ DeepSeek 大模型
 
-**在线演示**：🔗 **https://canola-kindness-scavenger.ngrok-free.dev**（固定地址）｜ https://requirements-real-pendant-absent.trycloudflare.com（备用）
-> 首次访问 ngrok 地址会出现 ngrok 的提示页，点一次「Visit Site」即可；部署：阿里云 ECS · Nginx · systemd · Cloudflare/ngrok 双通道
+**在线演示**：🔗 **https://requirements-real-pendant-absent.trycloudflare.com**（HTTPS，手机可直接打开）｜ http://47.119.38.7（IP 直连，最快）
+> 注：ngrok 域名在国内部分手机浏览器会被安全拦截，故不作为主入口。部署：阿里云 ECS · Nginx · systemd · Cloudflare Tunnel
 部署：阿里云 ECS · Ubuntu 22.04 · Nginx 反代 · systemd 常驻 · Cloudflare Tunnel
 账号：`quality / qc123456`（质控医师）、`doctor / doc123456`（临床医师）、`admin / admin123`（管理员）
 
