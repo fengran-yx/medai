@@ -158,7 +158,7 @@ jobs:
 
           echo "--- rules usage ---"
           curl -fsS http://127.0.0.1:8801/api/rules/usage -H "Authorization: Bearer $TOKEN" \
-            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||typeof j.data['C-001']!=='number'){console.error('bad rule usage',s.slice(0,200));process.exit(1)}console.log('rule usage C-001:',j.data['C-001'])})"
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const vals=Object.values(j.data||{});if(j.code!==0||vals.length===0||vals.some(v=>typeof v!=='number')){console.error('bad rule usage',s.slice(0,200));process.exit(1)}console.log('rule usage keys:',vals.length,'total hits:',vals.reduce((a,b)=>a+b,0))})"
 
           echo "--- review workbench + override ---"
           RID=$(curl -fsS http://127.0.0.1:8801/api/reviews/pending -H "Authorization: Bearer $TOKEN" \
