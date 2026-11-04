@@ -233,6 +233,45 @@ async function main() {
     }
   }
 
+  // 历史病历补一份“基线版本”，让升级后的首次复评也能对比出字段变化
+  if (await hasTable('record_versions')) {
+    const [rows] = await pool.query(
+      `SELECT mr.id, mr.chief_complaint, mr.present_illness, mr.past_history,
+              mr.physical_exam, mr.auxiliary_exam, mr.diagnosis, mr.treatment,
+              q.id AS report_id, q.score, q.level,
+              q.dim_completeness, q.dim_accuracy, q.dim_logic, q.dim_terminology, q.created_at
+       FROM medical_records mr
+       JOIN qc_reports q ON q.id = (SELECT MAX(q2.id) FROM qc_reports q2 WHERE q2.record_id = mr.id)
+       WHERE NOT EXISTS (SELECT 1 FROM record_versions rv WHERE rv.record_id = mr.id)`,
+    );
+    let seeded = 0;
+    for (const r of rows) {
+      const snapshot = {
+        chief_complaint: r.chief_complaint || '',
+        present_illness: r.present_illness || '',
+        past_history: r.past_history || '',
+        physical_exam: r.physical_exam || '',
+        auxiliary_exam: r.auxiliary_exam || '',
+        diagnosis: r.diagnosis || '',
+        treatment: r.treatment || '',
+      };
+      const dimensions = {
+        completeness: Number(r.dim_completeness || 0),
+        accuracy: Number(r.dim_accuracy || 0),
+        logic: Number(r.dim_logic || 0),
+        terminology: Number(r.dim_terminology || 0),
+      };
+      await pool.query(
+        `INSERT INTO record_versions
+         (record_id, version, snapshot, dimensions, score, level, report_id, source, created_at)
+         VALUES (?, 1, ?, ?, ?, ?, ?, 'qc', ?)`,
+        [r.id, JSON.stringify(snapshot), JSON.stringify(dimensions), r.score, r.level, r.report_id, r.created_at],
+      );
+      seeded += 1;
+    }
+    if (seeded) console.log(`✔ 已为历史病历补建基线版本：${seeded} 份`);
+  }
+
   // 已存在的不通过病历补建整改任务（幂等）
   if (await hasTable('rectify_tasks')) {
     const [r] = await pool.query(
