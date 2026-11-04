@@ -25,7 +25,10 @@ export function request<T>(options: {
   header?: Record<string, string>;
 }): Promise<T> {
   return new Promise((resolve, reject) => {
-    const token = uni.getStorageSync('medai_token') || '';
+    let token: any = uni.getStorageSync('medai_token') || '';
+    if (typeof token === 'string' && token.startsWith('"') && token.endsWith('"')) {
+      try { token = JSON.parse(token); } catch { token = token.slice(1, -1); }
+    }
     uni.request({
       url: `${API_BASE}${options.url}`,
       method: options.method || 'GET',

@@ -20,13 +20,36 @@
       </view>
       <view class="item">
         <text class="item-label">客户端</text>
-        <text class="item-value">微信小程序 · MVP</text>
+        <text class="item-value">微信小程序 · P0</text>
+      </view>
+    </view>
+
+    <view class="card menu">
+      <view class="menu-item" @click="go('/pages/password/index')">
+        <text class="menu-icon">密</text>
+        <text class="menu-label">修改密码</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view v-if="canQC" class="menu-item" @click="go('/pages/rules/index')">
+        <text class="menu-icon">规</text>
+        <text class="menu-label">质控规则</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view v-if="canQC" class="menu-item" @click="go('/pages/logs/index')">
+        <text class="menu-icon">审</text>
+        <text class="menu-label">操作日志 / 审计校验</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view v-if="isAdmin" class="menu-item" @click="go('/pages/users/index')">
+        <text class="menu-icon">用</text>
+        <text class="menu-label">用户管理</text>
+        <text class="menu-arrow">›</text>
       </view>
     </view>
 
     <view class="card tip-card">
-      <text class="tip-title">微信登录说明</text>
-      <text class="tip-text">当前版本使用院内账号登录。正式上线时需要：小程序 AppID、后端 jscode2session 换码、users.wechat_openid 绑定、订阅消息模板。</text>
+      <text class="tip-title">小程序说明</text>
+      <text class="tip-text">微信一键登录已接入，首次使用需绑定院内账号；管理配置（批量导入、数据导出、系统设置）仍建议在 Web 端完成。</text>
     </view>
 
     <button class="btn-secondary logout" @click="doLogout">退出登录</button>
@@ -36,9 +59,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { API_BASE } from '@/config';
-import { authState, logout, roleText } from '@/stores/auth';
+import { authState, canQC, logout, roleText } from '@/stores/auth';
 
 const initial = computed(() => (authState.user?.name || '医').slice(-2));
+const isAdmin = computed(() => authState.user?.role === 'admin');
+
+function go(url: string) {
+  uni.navigateTo({ url });
+}
 
 function doLogout() {
   uni.showModal({
@@ -77,6 +105,13 @@ function doLogout() {
 .tip-card { background: #f1f8f6; }
 .tip-title { display: block; font-size: 26rpx; font-weight: 700; color: #0b5c56; }
 .tip-text { display: block; margin-top: 10rpx; font-size: 22rpx; color: #475569; line-height: 1.7; }
+
+.menu { padding: 0 24rpx; }
+.menu-item { display: flex; align-items: center; padding: 24rpx 0; border-bottom: 1rpx solid #eef2f5; }
+.menu-item:last-child { border-bottom: none; }
+.menu-icon { width: 52rpx; height: 52rpx; line-height: 52rpx; text-align: center; border-radius: 14rpx; background: #e9f7f5; color: #0b5c56; font-size: 24rpx; font-weight: 700; margin-right: 16rpx; }
+.menu-label { flex: 1; font-size: 26rpx; color: #1e293b; }
+.menu-arrow { color: #cbd5e1; font-size: 30rpx; }
 
 .logout { margin-top: 10rpx; }
 </style>

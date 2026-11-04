@@ -103,7 +103,7 @@ userRouter.use(requireAuth);
 userRouter.get('/', requireRole('admin'), async (_req, res) => {
   const rows = await query(
     `SELECT u.id, u.username, u.name, u.role, u.title, u.phone, u.status, u.last_login_at, u.created_at,
-            u.failed_attempts, u.locked_until, u.token_version,
+            u.dept_id, u.failed_attempts, u.locked_until, u.token_version,
             d.name AS dept_name
      FROM users u LEFT JOIN departments d ON d.id = u.dept_id ORDER BY u.id`,
   );

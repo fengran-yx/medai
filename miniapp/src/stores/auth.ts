@@ -10,9 +10,27 @@ export interface MiniUser {
   deptName?: string;
 }
 
+function normalizeToken(raw: any): string {
+  if (typeof raw !== 'string') return '';
+  let token = raw.trim();
+  if (token.startsWith('"') && token.endsWith('"')) {
+    try { token = JSON.parse(token); } catch { token = token.slice(1, -1); }
+  }
+  return token;
+}
+
+function readUser(): MiniUser | null {
+  const raw = uni.getStorageSync('medai_user');
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  return raw as MiniUser;
+}
+
 export const authState = reactive<{ token: string; user: MiniUser | null }>({
-  token: uni.getStorageSync('medai_token') || '',
-  user: uni.getStorageSync('medai_user') || null,
+  token: normalizeToken(uni.getStorageSync('medai_token')),
+  user: readUser(),
 });
 
 export const isLogin = computed(() => Boolean(authState.token));
@@ -26,6 +44,11 @@ export function setLogin(token: string, user: MiniUser) {
   authState.user = user;
   uni.setStorageSync('medai_token', token);
   uni.setStorageSync('medai_user', user);
+}
+
+export function setToken(token: string) {
+  authState.token = token;
+  uni.setStorageSync('medai_token', token);
 }
 
 export function logout() {

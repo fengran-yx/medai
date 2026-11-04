@@ -282,7 +282,24 @@ export const api = {
       data: { username, password },
     }),
 
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ token: string }>({
+      url: '/api/auth/change-password',
+      method: 'POST',
+      data: { oldPassword, newPassword },
+    }),
+
   overview: () => request<Record<string, number>>({ url: '/api/dashboard/overview' }),
+
+  trends: (days = 7) => request<any[]>({ url: '/api/dashboard/trends', data: { days } }),
+
+  deptDistribution: () => request<any[]>({ url: '/api/dashboard/dept-distribution' }),
+
+  issueCategories: () => request<any[]>({ url: '/api/dashboard/issue-categories' }),
+
+  recentQC: () => request<any[]>({ url: '/api/dashboard/recent-qc' }),
+
+  rectification: () => request<any>({ url: '/api/dashboard/rectification' }),
 
   reviews: (params: { page?: number; size?: number } = {}) =>
     request<Paged<ReviewItem>>({
@@ -376,4 +393,30 @@ export const api = {
     }),
 
   batchStatus: (id: number) => request<BatchStatus>({ url: `/api/records/batch-qc/${id}` }),
+
+  rules: () => request<any[]>({ url: '/api/rules' }),
+
+  ruleUsage: () => request<Record<string, number>>({ url: '/api/rules/usage' }),
+
+  updateRule: (id: number, data: { enabled?: boolean; weight?: number; severity?: string }) =>
+    request<any>({ url: `/api/rules/${id}`, method: 'PUT', data }),
+
+  logs: (params: { page?: number; size?: number; action?: string; keyword?: string } = {}) =>
+    request<Paged<any>>({
+      url: '/api/logs',
+      data: {
+        page: params.page || 1,
+        size: params.size || 20,
+        action: params.action || '',
+        keyword: params.keyword || '',
+      },
+    }),
+
+  verifyLogs: () => request<any>({ url: '/api/logs/verify' }),
+
+  users: () => request<any[]>({ url: '/api/users' }),
+
+  createUser: (data: any) => request<any>({ url: '/api/users', method: 'POST', data }),
+
+  updateUser: (id: number, data: any) => request<any>({ url: `/api/users/${id}`, method: 'PUT', data }),
 };

@@ -13,6 +13,10 @@
       "style": { "navigationBarTitleText": "患者管理" }
     },
     {
+      "path": "pages/dashboard/index",
+      "style": { "navigationBarTitleText": "质控驾驶舱" }
+    },
+    {
       "path": "pages/me/index",
       "style": { "navigationBarTitleText": "我的" }
     },
@@ -50,6 +54,26 @@
     {
       "path": "pages/report/index",
       "style": { "navigationBarTitleText": "质控报告" }
+    },
+    {
+      "path": "pages/rules/index",
+      "style": { "navigationBarTitleText": "质控规则" }
+    },
+    {
+      "path": "pages/users/index",
+      "style": { "navigationBarTitleText": "用户管理" }
+    },
+    {
+      "path": "pages/user-edit/index",
+      "style": { "navigationBarTitleText": "编辑用户" }
+    },
+    {
+      "path": "pages/logs/index",
+      "style": { "navigationBarTitleText": "操作日志" }
+    },
+    {
+      "path": "pages/password/index",
+      "style": { "navigationBarTitleText": "修改密码" }
     }
   ],
   "tabBar": {
@@ -75,6 +99,12 @@
         "text": "患者",
         "iconPath": "static/tab/patient.png",
         "selectedIconPath": "static/tab/patient-active.png"
+      },
+      {
+        "pagePath": "pages/dashboard/index",
+        "text": "看板",
+        "iconPath": "static/tab/dashboard.png",
+        "selectedIconPath": "static/tab/dashboard-active.png"
       },
       {
         "pagePath": "pages/me/index",
