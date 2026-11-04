@@ -29,7 +29,7 @@ npm run type-check         # 类型检查
 1. 微信开发者工具（需**以管理员身份运行**）→ 项目列表 → **导入项目**
 2. 目录选择：  
    `miniapp/dist/build/mp-weixin`
-3. AppID：先用**测试号**（构建配置为 `touristappid`）；正式发布换自己的 AppID
+3. AppID：已配置真实 AppID `wx9e812ece6e5abdb5`；Secret 只放服务器 `.env`，不要写进小程序或 git
 4. 打开项目后：右上角「详情」→「本地设置」→ 勾选  
    **不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书**
 5. 登录账号：`quality / qc123456`（质控医师）或 `doctor / doc123456`（临床医师）
