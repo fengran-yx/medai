@@ -9,6 +9,10 @@
       "style": { "navigationBarTitleText": "病历质控" }
     },
     {
+      "path": "pages/patients/index",
+      "style": { "navigationBarTitleText": "患者管理" }
+    },
+    {
       "path": "pages/me/index",
       "style": { "navigationBarTitleText": "我的" }
     },
@@ -22,6 +26,30 @@
     {
       "path": "pages/record-detail/index",
       "style": { "navigationBarTitleText": "病历详情" }
+    },
+    {
+      "path": "pages/record-edit/index",
+      "style": { "navigationBarTitleText": "编辑病历" }
+    },
+    {
+      "path": "pages/patient-detail/index",
+      "style": { "navigationBarTitleText": "患者详情" }
+    },
+    {
+      "path": "pages/patient-edit/index",
+      "style": { "navigationBarTitleText": "患者信息" }
+    },
+    {
+      "path": "pages/batch/index",
+      "style": { "navigationBarTitleText": "批量质控" }
+    },
+    {
+      "path": "pages/versions/index",
+      "style": { "navigationBarTitleText": "质控历史与版本" }
+    },
+    {
+      "path": "pages/report/index",
+      "style": { "navigationBarTitleText": "质控报告" }
     }
   ],
   "tabBar": {
@@ -41,6 +69,12 @@
         "text": "病历",
         "iconPath": "static/tab/records.png",
         "selectedIconPath": "static/tab/records-active.png"
+      },
+      {
+        "pagePath": "pages/patients/index",
+        "text": "患者",
+        "iconPath": "static/tab/patient.png",
+        "selectedIconPath": "static/tab/patient-active.png"
       },
       {
         "pagePath": "pages/me/index",

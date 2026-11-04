@@ -39,6 +39,26 @@ router.get('/', async (req, res) => {
   res.json({ code: 0, data: { list: rows, total: totalRow.total, page, size } });
 });
 
+/** 就诊详情（含患者、科室、经治医师） */
+router.get('/:id', async (req, res) => {
+  const visit = await one(
+    `SELECT v.*, p.name AS patient_name, p.gender, p.birth_date, p.mrn, p.allergy,
+            d.name AS dept_name, u.name AS doctor_name,
+            (SELECT id FROM medical_records mr WHERE mr.visit_id = v.id ORDER BY mr.id DESC LIMIT 1) AS record_id
+     FROM visits v
+     JOIN patients p ON p.id = v.patient_id
+     LEFT JOIN departments d ON d.id = v.dept_id
+     LEFT JOIN users u ON u.id = v.doctor_id
+     WHERE v.id = ?`,
+    [req.params.id],
+  );
+  if (!visit) return res.status(404).json({ code: 404, message: '就诊记录不存在' });
+  if (req.user.role === 'clinician' && Number(visit.doctor_id) !== Number(req.user.id)) {
+    return res.status(403).json({ code: 403, message: '无权访问该就诊记录' });
+  }
+  res.json({ code: 0, data: visit });
+});
+
 /** 新建就诊（挂号/登记处创建，临床医师不可直接建就诊） */
 router.post('/', requireRole('admin', 'quality'), async (req, res) => {
   const { patientId, deptId, visitType, chiefComplaint, diagnosis } = req.body || {};

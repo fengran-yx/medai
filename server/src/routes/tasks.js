@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole, audit } from '../middleware/auth.js';
-import { listTasks, closeTask } from '../qc/tasks.js';
+import { listTasks, closeTask, submitTask } from '../qc/tasks.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -18,6 +18,22 @@ router.get('/', async (req, res) => {
     keyword: String(req.query.keyword || '').trim(),
   });
   res.json({ code: 0, data });
+});
+
+/** 提交整改（临床医师提交本人任务，质控/管理员可代提交） */
+router.post('/:id/submit', async (req, res, next) => {
+  try {
+    const result = await submitTask({
+      taskId: Number(req.params.id),
+      user: req.user,
+      note: req.body?.note,
+    });
+    if (result.error) return res.status(result.error.status).json({ code: result.error.status, message: result.error.message });
+    await audit(req, 'rectify.submit', 'rectify_task', Number(req.params.id), `提交整改：${req.body?.note || '已整改待复核'}`);
+    res.json({ code: 0, message: '整改已提交，等待质控复核' });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** 质控科人工关闭任务 */

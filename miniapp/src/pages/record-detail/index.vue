@@ -27,7 +27,10 @@
             <text class="task-title">整改任务 · {{ taskText(record.openTask.status) }}</text>
             <text class="task-due">截止 {{ fmt(record.openTask.due_at) }}<text v-if="taskOverdue"> · 已逾期</text></text>
           </view>
-          <text v-if="canQC" class="task-close" @click="closeTask">关闭</text>
+          <view class="task-actions">
+            <text v-if="record.openTask.status === 'open'" class="task-submit" @click="submitRectify">提交整改</text>
+            <text v-if="canQC" class="task-close" @click="closeTask">关闭</text>
+          </view>
         </view>
       </view>
 
@@ -109,8 +112,10 @@
         </view>
       </view>
 
-      <view class="bottom-actions">
-        <button class="btn-secondary" @click="goBack">返回</button>
+      <view class="bottom-grid">
+        <button v-if="canEdit" class="btn-secondary" @click="goEdit">编辑病历</button>
+        <button class="btn-secondary" @click="goReport">质控报告</button>
+        <button class="btn-secondary" @click="goVersions">历史 / 版本</button>
         <button class="btn-primary" :loading="qcing" @click="runQC">重新质控</button>
       </view>
     </template>
@@ -121,7 +126,7 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { api, type LatestQC, type QCIssue, type RecordDetail } from '@/api';
-import { canQC } from '@/stores/auth';
+import { authState, canQC } from '@/stores/auth';
 
 const id = ref(0);
 const record = ref<RecordDetail | null>(null);
@@ -129,6 +134,7 @@ const loading = ref(false);
 const qcing = ref(false);
 const reviewing = ref<'' | 'confirm' | 'override'>('');
 const reviewForm = ref({ score: '', note: '' });
+const canEdit = computed(() => canQC.value || Number(record.value?.doctor_id) === Number(authState.user?.id));
 
 const latestQC = computed<LatestQC | null>(() => record.value?.latestQC || null);
 const issues = computed<QCIssue[]>(() => {
@@ -274,8 +280,35 @@ async function closeTask() {
   } as any);
 }
 
-function goBack() {
-  uni.navigateBack({ delta: 1 });
+async function submitRectify() {
+  if (!record.value?.openTask) return;
+  const taskId = record.value.openTask.id;
+  uni.showModal({
+    title: '提交整改',
+    content: '',
+    editable: true,
+    placeholderText: '填写整改说明，如：已补充现病史并修正诊断',
+    success: async (res: any) => {
+      if (!res.confirm) return;
+      try {
+        await api.submitTask(taskId, res.content || '已按要求完成整改');
+        uni.showToast({ title: '已提交，等待复核', icon: 'success' });
+        await load();
+      } catch (e: any) {
+        uni.showModal({ title: '提交失败', content: e.message || '未知错误', showCancel: false });
+      }
+    },
+  } as any);
+}
+
+function goEdit() {
+  uni.navigateTo({ url: `/pages/record-edit/index?id=${id.value}` });
+}
+function goReport() {
+  uni.navigateTo({ url: `/pages/report/index?id=${id.value}` });
+}
+function goVersions() {
+  uni.navigateTo({ url: `/pages/versions/index?id=${id.value}` });
 }
 
 onLoad((options: any) => {
@@ -370,8 +403,11 @@ onLoad((options: any) => {
 .field-value { display: block; font-size: 25rpx; line-height: 1.75; color: #1e293b; white-space: pre-wrap; word-break: break-all; }
 .emptyText { color: #cbd5e1; }
 
-.bottom-actions { display: flex; margin-top: 8rpx; }
-.bottom-actions button { flex: 1; margin-right: 16rpx; }
-.bottom-actions button:last-child { margin-right: 0; }
+.task-actions { display: flex; align-items: center; }
+.task-submit { color: #0f8b7f; font-size: 24rpx; font-weight: 600; padding: 8rpx 0 8rpx 16rpx; }
+.task-close { color: #b02a2f; font-size: 24rpx; padding: 8rpx 0 8rpx 16rpx; }
+
+.bottom-grid { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 8rpx; }
+.bottom-grid button { width: 48.5%; margin: 0 0 14rpx; height: 82rpx; line-height: 82rpx; font-size: 26rpx; }
 .small { padding: 24rpx 0; font-size: 22rpx; }
 </style>

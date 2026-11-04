@@ -17,10 +17,20 @@
       </view>
     </scroll-view>
 
+    <view class="row batch-row">
+      <view class="batch-toggle" :class="{ active: selectMode }" @click="toggleSelectMode">
+        {{ selectMode ? '退出批量' : '批量质控' }}
+      </view>
+      <view v-if="selectMode" class="select-all" @click="selectAll">{{ allSelected ? '取消全选' : '全选本页' }}</view>
+      <view class="spacer" />
+      <text v-if="selectMode" class="selected-text">已选 {{ selected.length }} 份</text>
+    </view>
+
     <view v-if="loading && !rows.length" class="empty">加载中…</view>
 
-    <view v-for="row in rows" :key="row.id" class="card record-card" @click="goDetail(row.id)">
+    <view v-for="row in rows" :key="row.id" class="card record-card" :class="{ selecting: selectMode }" @click="onCard(row.id)">
       <view class="row">
+        <view v-if="selectMode" class="check" :class="{ on: selected.includes(row.id) }" @click.stop="toggle(row.id)">✓</view>
         <view class="grow">
           <view class="row">
             <text class="patient">{{ row.patient_name }}</text>
@@ -41,17 +51,25 @@
         <text v-if="row.qc_review_status === 'pending'" class="tag tag-amber">待复核</text>
         <text v-if="row.open_task_id" class="tag tag-red">整改中</text>
         <view class="spacer" />
-        <text class="link">查看详情 ›</text>
+        <text class="link">{{ selectMode ? '点选' : '查看详情 ›' }}</text>
       </view>
     </view>
 
     <view v-if="!loading && !rows.length" class="empty">没有符合条件的病历</view>
     <view v-if="rows.length && rows.length >= total" class="empty small">已经到底了</view>
+
+    <view v-if="selectMode && selected.length" class="batch-bar">
+      <view class="batch-info">
+        <text class="batch-count">{{ selected.length }}</text>
+        <text class="batch-label">份病历待质控</text>
+      </view>
+      <button class="btn-primary batch-btn" :loading="batching" @click="runBatch">开始批量质控</button>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
 import { api, type RecordRow } from '@/api';
 
@@ -62,6 +80,11 @@ const total = ref(0);
 const page = ref(1);
 const size = 20;
 const loading = ref(false);
+const selectMode = ref(false);
+const selected = ref<number[]>([]);
+const batching = ref(false);
+
+const allSelected = computed(() => rows.value.length > 0 && rows.value.every((r) => selected.value.includes(r.id)));
 
 const statusOptions = [
   { label: '全部', value: '' },
@@ -110,6 +133,58 @@ function setStatus(value: string) {
 
 function goDetail(id: number) {
   uni.navigateTo({ url: `/pages/record-detail/index?id=${id}` });
+}
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value;
+  if (!selectMode.value) selected.value = [];
+}
+
+function toggle(id: number) {
+  const i = selected.value.indexOf(id);
+  if (i >= 0) selected.value.splice(i, 1);
+  else selected.value.push(id);
+}
+
+function selectAll() {
+  if (allSelected.value) {
+    selected.value = [];
+  } else {
+    selected.value = rows.value.map((r) => r.id);
+  }
+}
+
+function onCard(id: number) {
+  if (selectMode.value) toggle(id);
+  else goDetail(id);
+}
+
+async function runBatch() {
+  if (!selected.value.length) {
+    uni.showToast({ title: '请先选择病历', icon: 'none' });
+    return;
+  }
+  if (selected.value.length > 20) {
+    uni.showToast({ title: '单次最多 20 份', icon: 'none' });
+    return;
+  }
+  batching.value = true;
+  uni.showLoading({ title: '创建批量任务…', mask: true });
+  try {
+    const data = await api.createBatch(selected.value);
+    uni.hideLoading();
+    if (data.skipped?.length) {
+      uni.showToast({ title: `${data.skipped.length} 份已在队列中，已跳过`, icon: 'none' });
+    }
+    selected.value = [];
+    selectMode.value = false;
+    uni.navigateTo({ url: `/pages/batch/index?id=${data.batchId}` });
+  } catch (e: any) {
+    uni.hideLoading();
+    uni.showModal({ title: '批量质控失败', content: e.message || '未知错误', showCancel: false });
+  } finally {
+    batching.value = false;
+  }
 }
 
 onShow(() => load(true));
@@ -254,5 +329,96 @@ onReachBottom(() => {
 .small {
   padding: 30rpx 0;
   font-size: 22rpx;
+}
+
+.batch-row {
+  margin: 0 2rpx 16rpx;
+  align-items: center;
+}
+
+.batch-toggle {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #b9ded7;
+  color: #0b5c56;
+  font-size: 23rpx;
+  font-weight: 600;
+}
+
+.batch-toggle.active {
+  background: #0b5c56;
+  color: #fff;
+  border-color: #0b5c56;
+}
+
+.select-all {
+  margin-left: 14rpx;
+  color: #0f8b7f;
+  font-size: 22rpx;
+}
+
+.selected-text {
+  color: #64748b;
+  font-size: 22rpx;
+}
+
+.record-card.selecting {
+  padding-left: 20rpx;
+}
+
+.check {
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  border-radius: 50%;
+  border: 2rpx solid #cbd5e1;
+  color: transparent;
+  font-size: 24rpx;
+  margin-right: 14rpx;
+  flex: none;
+}
+
+.check.on {
+  background: #0f8b7f;
+  border-color: #0f8b7f;
+  color: #fff;
+}
+
+.batch-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -8rpx 30rpx rgba(15, 23, 42, 0.1);
+  z-index: 20;
+}
+
+.batch-info {
+  flex: 1;
+}
+
+.batch-count {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #0b5c56;
+}
+
+.batch-label {
+  margin-left: 8rpx;
+  color: #64748b;
+  font-size: 22rpx;
+}
+
+.batch-btn {
+  width: 300rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 26rpx;
+  margin: 0;
 }
 </style>

@@ -156,6 +156,24 @@ export async function listTasks({ user, page = 1, size = 20, status = '', deptId
   };
 }
 
+/** 临床医师提交整改（质控科可代提交） */
+export async function submitTask({ taskId, user, note = '' }) {
+  const task = await one('SELECT * FROM rectify_tasks WHERE id = ?', [taskId]);
+  if (!task) return { error: { status: 404, message: '整改任务不存在' } };
+  if (!['open', 'submitted'].includes(task.status)) {
+    return { error: { status: 409, message: '该任务已通过或已关闭，不能重复提交' } };
+  }
+  if (user?.role === 'clinician' && Number(task.doctor_id) !== Number(user.id)) {
+    return { error: { status: 403, message: '只能提交本人的整改任务' } };
+  }
+  const text = note ? String(note).slice(0, 500) : task.note;
+  await query(
+    `UPDATE rectify_tasks SET status = 'submitted', note = ?, updated_at = NOW() WHERE id = ?`,
+    [text, taskId],
+  );
+  return { task: { ...task, status: 'submitted', note: text } };
+}
+
 /** 人工关闭任务（质控科确认整改完成/免整改） */
 export async function closeTask({ taskId, user, note = '' }) {
   const task = await one('SELECT * FROM rectify_tasks WHERE id = ?', [taskId]);
