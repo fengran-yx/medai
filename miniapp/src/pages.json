@@ -1,0 +1,60 @@
+{
+  "pages": [
+    {
+      "path": "pages/workbench/index",
+      "style": { "navigationBarTitleText": "质控工作台" }
+    },
+    {
+      "path": "pages/records/index",
+      "style": { "navigationBarTitleText": "病历质控" }
+    },
+    {
+      "path": "pages/me/index",
+      "style": { "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/record-detail/index",
+      "style": { "navigationBarTitleText": "病历详情" }
+    }
+  ],
+  "tabBar": {
+    "color": "#94a3b8",
+    "selectedColor": "#0f8b7f",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/workbench/index",
+        "text": "工作台",
+        "iconPath": "static/tab/workbench.png",
+        "selectedIconPath": "static/tab/workbench-active.png"
+      },
+      {
+        "pagePath": "pages/records/index",
+        "text": "病历",
+        "iconPath": "static/tab/records.png",
+        "selectedIconPath": "static/tab/records-active.png"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的",
+        "iconPath": "static/tab/me.png",
+        "selectedIconPath": "static/tab/me-active.png"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "智医质控",
+    "navigationBarBackgroundColor": "#0b5c56",
+    "backgroundColor": "#f4f7fa",
+    "backgroundTextStyle": "dark"
+  }
+}

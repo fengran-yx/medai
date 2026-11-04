@@ -16,6 +16,7 @@ import kbRouter from './routes/kb.js';
 import agentRouter from './routes/agent.js';
 import reviewRouter from './routes/reviews.js';
 import taskRouter from './routes/tasks.js';
+import mpRouter from './routes/mp.js';
 import { recoverInterruptedBatches } from './qc/batch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,7 @@ app.use('/api/kb', kbRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/reviews', reviewRouter);
 app.use('/api/rectify-tasks', taskRouter);
+app.use('/api/mp', mpRouter);
 
 // 生产模式：托管前端构建产物
 const webDist = path.resolve(__dirname, '../../web/dist');

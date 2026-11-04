@@ -57,10 +57,15 @@ CREATE TABLE users (
   failed_attempts TINYINT    NOT NULL DEFAULT 0 COMMENT '连续登录失败次数',
   locked_until  DATETIME     DEFAULT NULL COMMENT '锁定截止时间',
   token_version INT          NOT NULL DEFAULT 0 COMMENT '会话版本，改密/强制下线时 +1',
+  wechat_openid VARCHAR(64)  DEFAULT NULL COMMENT '微信小程序 openid',
+  wechat_unionid VARCHAR(64) DEFAULT NULL COMMENT '微信 unionid',
+  wecom_userid VARCHAR(64)   DEFAULT NULL COMMENT '企业微信 userid',
+  wechat_bound_at DATETIME   DEFAULT NULL COMMENT '微信绑定时间',
   last_login_at DATETIME     DEFAULT NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_user_name (username),
+  UNIQUE KEY uk_user_openid (wechat_openid),
   KEY idx_user_dept (dept_id),
   CONSTRAINT fk_user_dept FOREIGN KEY (dept_id) REFERENCES departments (id)
 ) ENGINE=InnoDB COMMENT='系统用户';

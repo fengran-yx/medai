@@ -15,7 +15,13 @@ export const config = {
     baseUrl: (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
     model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
   },
+  wechat: {
+    mpAppId: process.env.WECHAT_MP_APPID || '',
+    mpSecret: process.env.WECHAT_MP_SECRET || '',
+    apiBase: 'https://api.weixin.qq.com',
+  },
   sqlDir: path.resolve(__dirname, '../sql'),
 };
 
 export const hasRemoteAI = Boolean(config.deepseek.apiKey);
+export const hasWechatMP = Boolean(config.wechat.mpAppId && config.wechat.mpSecret);

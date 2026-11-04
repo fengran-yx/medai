@@ -181,6 +181,10 @@ async function main() {
     ['users', 'failed_attempts', 'TINYINT NOT NULL DEFAULT 0 COMMENT \'连续登录失败次数\' AFTER status'],
     ['users', 'locked_until', 'DATETIME DEFAULT NULL COMMENT \'锁定截止时间\' AFTER failed_attempts'],
     ['users', 'token_version', 'INT NOT NULL DEFAULT 0 COMMENT \'会话版本\' AFTER locked_until'],
+    ['users', 'wechat_openid', 'VARCHAR(64) DEFAULT NULL COMMENT \'微信小程序 openid\' AFTER token_version'],
+    ['users', 'wechat_unionid', 'VARCHAR(64) DEFAULT NULL COMMENT \'微信 unionid\' AFTER wechat_openid'],
+    ['users', 'wecom_userid', 'VARCHAR(64) DEFAULT NULL COMMENT \'企业微信 userid\' AFTER wechat_unionid'],
+    ['users', 'wechat_bound_at', 'DATETIME DEFAULT NULL COMMENT \'微信绑定时间\' AFTER wecom_userid'],
     ['qc_reports', 'review_status', 'VARCHAR(20) NOT NULL DEFAULT \'pending\' COMMENT \'pending/confirmed/overridden\' AFTER record_version'],
     ['qc_reports', 'reviewer_id', 'BIGINT DEFAULT NULL AFTER review_status'],
     ['qc_reports', 'reviewer_name', 'VARCHAR(50) DEFAULT NULL AFTER reviewer_id'],
@@ -201,6 +205,11 @@ async function main() {
   if (!(await hasIndex('qc_reports', 'idx_qc_review'))) {
     await pool.query('ALTER TABLE qc_reports ADD KEY idx_qc_review (review_status, id)');
     created.push('qc_reports.idx_qc_review');
+  }
+
+  if (!(await hasIndex('users', 'uk_user_openid'))) {
+    await pool.query('ALTER TABLE users ADD UNIQUE KEY uk_user_openid (wechat_openid)');
+    created.push('users.uk_user_openid');
   }
 
   // 历史报告视为已复核，避免升级后把旧数据全部塞进待复核队列

@@ -153,6 +153,7 @@ npm run dev
 | 质控规则 | 14 条规则，按完整性 / 准确性 / 逻辑性 / 规范性分类，可启停、调权重与严重度；修改后下一次质控立即生效，并展示近 30 天命中次数 |
 | 操作日志 | 登录、质控、批量质控、建档、诊断、规则调整全留痕 |
 | 用户管理 | 新增账号、改角色 / 科室、启停、重置密码 |
+| 微信小程序（MVP） | uni-app + Vue3：登录/绑定、质控工作台、病历列表、病历详情、人工复核、整改任务；微信一键登录代码已就绪，配置 AppID 后启用 |
 
 ---
 
@@ -375,6 +376,35 @@ AI 质控进医院，难点不是“能不能打分”，而是**谁对结果负
 
 ---
 
+## 三·九、微信小程序端（MVP）
+
+代码在 [`miniapp/`](miniapp/README.md)，使用 **uni-app + Vue 3 + TypeScript** 复用现有 API。
+
+| 页面 | 功能 |
+| --- | --- |
+| 登录 | 院内账号密码 + 微信一键登录（已编码，配置 AppID 后启用） |
+| 质控工作台 | 待复核 / 整改任务 / 逾期统计 |
+| 病历列表 | 搜索、状态筛选、下拉刷新、分页 |
+| 病历详情 | AI 报告、四维评分、问题清单、人工复核/改判、整改任务关闭 |
+| 我的 | 用户信息、接口地址、退出登录 |
+
+```bash
+cd miniapp
+npm install --registry=https://registry.npmmirror.com
+npm run build:mp-weixin     # 产物 dist/build/mp-weixin
+```
+
+微信登录需要服务端配置：
+
+```ini
+WECHAT_MP_APPID=你的小程序AppID
+WECHAT_MP_SECRET=你的小程序Secret
+```
+
+小程序 `wx.login` → `POST /api/mp/login` → 首次绑定院内账号（`bindToken`）→ 后续一键登录。未配置时返回 503，前端自动回退账号密码登录。正式发布仍需备案 HTTPS 域名、request 合法域名和医疗类目资质；ngrok 只适合演示。
+
+---
+
 ## 四、目录结构
 
 ```
@@ -409,12 +439,21 @@ medai/
 │       │   └── service.js      # 入库、索引缓存、问答、日志
 │       └── routes/
 │           ├── auth.js         # 登录、当前用户、改密码
+│           ├── mp.js           # 微信小程序登录 / 院内账号绑定
 │           ├── patients.js     # 患者 CRUD
 │           ├── visits.js       # 就诊 + 科室字典
 │           ├── records.js      # 病历 CRUD + 单条/批量质控 + 版本对比 + CSV 导出
+│           ├── reviews.js      # 待复核队列 + 复核/改判
+│           ├── tasks.js        # 整改任务列表 + 人工关闭
 │           ├── ai.js           # 辅助诊断、多轮问答、会话管理
 │           ├── dashboard.js    # 看板聚合 + 整改闭环指标
 │           └── admin.js        # 规则（含命中统计）、日志、用户
+├── miniapp/                    # 微信小程序（uni-app + Vue3）
+│   └── src/
+│       ├── pages/              # 登录 / 工作台 / 病历 / 详情 / 我的
+│       ├── api/                # uni.request 封装
+│       ├── stores/             # 登录态
+│       └── config.ts           # API_BASE
 └── web/                        # 前端
     ├── vite.config.ts          # /api 代理到 8801
     └── src/
@@ -462,6 +501,8 @@ medai/
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | `/auth/login` | 登录，返回 JWT |
+| GET | `/mp/status` | 微信小程序登录是否已配置 |
+| POST | `/mp/login` | **微信 code 登录 / 首次绑定院内账号** |
 | GET | `/auth/me` | 当前用户 |
 | POST | `/auth/change-password` | 修改密码 |
 | GET | `/patients` `?page&size&keyword` | 患者分页 |

@@ -160,6 +160,12 @@ jobs:
           curl -fsS http://127.0.0.1:8801/api/rules/usage -H "Authorization: Bearer $TOKEN" \
             | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const vals=Object.values(j.data||{});if(j.code!==0||vals.length===0||vals.some(v=>typeof v!=='number')){console.error('bad rule usage',s.slice(0,200));process.exit(1)}console.log('rule usage keys:',vals.length,'total hits:',vals.reduce((a,b)=>a+b,0))})"
 
+          echo "--- mini program auth fallback ---"
+          curl -fsS http://127.0.0.1:8801/api/mp/status \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||j.data.configured!==false){console.error('bad mp status',s.slice(0,200));process.exit(1)}console.log('mp configured:',j.data.configured)})"
+          MP_CODE=$(curl -s -o /tmp/mp-login.json -w "%{http_code}" -X POST http://127.0.0.1:8801/api/mp/login -H 'Content-Type: application/json' -d '{"code":"ci-test"}')
+          test "$MP_CODE" = "503" || { echo "expected 503 without WeChat config, got $MP_CODE"; cat /tmp/mp-login.json; exit 1; }
+
           echo "--- review workbench + override ---"
           RID=$(curl -fsS http://127.0.0.1:8801/api/reviews/pending -H "Authorization: Bearer $TOKEN" \
             | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||!j.data.list.length){console.error('no pending review',s.slice(0,200));process.exit(1)}console.log(j.data.list[0].id)})")
