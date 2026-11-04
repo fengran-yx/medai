@@ -2,16 +2,20 @@
  * 本地离线质控引擎（规则引擎）
  * 作用：在没有配置 DeepSeek Key 时，仍能给出可信、可解释的病历质控结果；
  *       配置了 Key 时作为大模型结果的兜底与校验基准。
+ *
+ * 规则来源：默认规则（rule-defs.js）+ 管理端在 qc_rules 表中的启停 / 权重 / 严重度调整。
+ * 这样「质控规则」页面上的修改会真正影响下一次评分，而不是只改展示。
  */
+import { normalizeRules, weightFactor } from '../qc/rule-defs.js';
 
 const FIELDS = [
-  { key: 'chief_complaint', label: '主诉', min: 6 },
-  { key: 'present_illness', label: '现病史', min: 20 },
-  { key: 'past_history', label: '既往史', min: 2 },
-  { key: 'physical_exam', label: '体格检查', min: 6 },
-  { key: 'auxiliary_exam', label: '辅助检查', min: 2 },
-  { key: 'diagnosis', label: '诊断', min: 2 },
-  { key: 'treatment', label: '处理意见', min: 2 },
+  { key: 'chief_complaint', label: '主诉', min: 6, rule: 'C-001' },
+  { key: 'present_illness', label: '现病史', min: 20, rule: 'C-002' },
+  { key: 'past_history', label: '既往史', min: 2, rule: 'C-003' },
+  { key: 'physical_exam', label: '体格检查', min: 6, rule: 'C-004' },
+  { key: 'auxiliary_exam', label: '辅助检查', min: 2, rule: 'C-005' },
+  { key: 'diagnosis', label: '诊断', min: 2, rule: 'C-007' },
+  { key: 'treatment', label: '处理意见', min: 2, rule: 'C-006' },
 ];
 
 const VAGUE_WORDS = ['不舒服', '有点', '大概', '可能吧', '差不多', '不太清楚', '感觉不适', '未见明显异常'];
@@ -21,42 +25,60 @@ function text(v) {
   return String(v ?? '').trim();
 }
 
-function issue(ruleCode, rule, severity, field, message, suggestion) {
-  return { ruleCode, rule, severity, field, message, suggestion };
-}
-
 /** 规则引擎打分，返回与 AI 相同结构的结果 */
-export function localQC(record) {
+export function localQC(record, options = {}) {
+  const rules = normalizeRules(options.rules);
   const issues = [];
   const dims = { completeness: 100, accuracy: 100, logic: 100, terminology: 100 };
+
+  const ruleOf = (code) => rules.get(code);
+  const active = (code) => {
+    const rule = ruleOf(code);
+    return !rule || rule.enabled !== 0;
+  };
+  const severityOf = (code, fallback) => ruleOf(code)?.severity || fallback;
+  const factorOf = (code) => weightFactor(rules, code);
+
+  /**
+   * 命中一条规则：规则被停用时直接不扣分、不出问题。
+   * @returns {number} 实际扣分（基础分 × 权重系数）
+   */
+  function hit(code, name, field, message, suggestion, baseDeduction) {
+    if (!active(code)) return 0;
+    const rule = ruleOf(code);
+    issues.push({
+      ruleCode: code,
+      rule: name,
+      severity: rule?.severity || 'minor',
+      field,
+      message,
+      suggestion,
+    });
+    return baseDeduction * factorOf(code);
+  }
 
   // 1. 完整性
   for (const f of FIELDS) {
     const value = text(record[f.key]);
     if (!value) {
-      const critical = ['chief_complaint', 'present_illness', 'diagnosis'].includes(f.key);
-      dims.completeness -= critical ? 35 : 18;
-      issues.push(
-        issue(
-          `C-${f.key.toUpperCase()}`,
-          `${f.label}缺失`,
-          critical ? 'critical' : 'major',
-          f.key,
-          `${f.label}未填写，属于必填项`,
-          `请补充${f.label}相关内容，保证病历要素完整`,
-        ),
+      const severity = severityOf(f.rule, 'major');
+      const base = severity === 'critical' ? 35 : 18;
+      dims.completeness -= hit(
+        f.rule,
+        `${f.label}缺失`,
+        f.key,
+        `${f.label}未填写，属于必填项`,
+        `请补充${f.label}相关内容，保证病历要素完整`,
+        base,
       );
     } else if (value.length < f.min) {
-      dims.completeness -= 10;
-      issues.push(
-        issue(
-          `C-${f.key.toUpperCase()}-SHORT`,
-          `${f.label}过于简略`,
-          'minor',
-          f.key,
-          `${f.label}仅 ${value.length} 字，信息量不足`,
-          `${f.label}建议写清时间、部位、程度、伴随症状等要素`,
-        ),
+      dims.completeness -= hit(
+        'C-008',
+        `${f.label}过于简略`,
+        f.key,
+        `${f.label}仅 ${value.length} 字，信息量不足`,
+        `${f.label}建议写清时间、部位、程度、伴随症状等要素`,
+        10,
       );
     }
   }
@@ -68,29 +90,23 @@ export function localQC(record) {
     const hits = ABNORMAL_HINT.filter((w) => cc.includes(w));
     const missing = hits.filter((w) => !pi.includes(w));
     if (missing.length) {
-      dims.logic -= 12;
-      issues.push(
-        issue(
-          'L-001',
-          '主诉与现病史不一致',
-          'major',
-          'present_illness',
-          `主诉中的「${missing.join('、')}」在现病史中未描述`,
-          '现病史需围绕主诉展开，说明起病时间、诱因、演变过程',
-        ),
+      dims.logic -= hit(
+        'L-001',
+        '主诉与现病史不一致',
+        'present_illness',
+        `主诉中的「${missing.join('、')}」在现病史中未描述`,
+        '现病史需围绕主诉展开，说明起病时间、诱因、演变过程',
+        12,
       );
     }
     if (!/[0-9一二三四五六七八九十]+\s*(天|日|周|月|年|小时|分钟)/.test(pi)) {
-      dims.logic -= 8;
-      issues.push(
-        issue(
-          'L-002',
-          '现病史缺少时间要素',
-          'major',
-          'present_illness',
-          '现病史未描述病程时间',
-          '补充起病时间与病程（如“3 天前”“反复 2 月余”）',
-        ),
+      dims.logic -= hit(
+        'L-002',
+        '现病史缺少时间要素',
+        'present_illness',
+        '现病史未描述病程时间',
+        '补充起病时间与病程（如“3 天前”“反复 2 月余”）',
+        8,
       );
     }
   }
@@ -99,44 +115,35 @@ export function localQC(record) {
   const allText = FIELDS.map((f) => text(record[f.key])).join(' ');
   const vague = VAGUE_WORDS.filter((w) => allText.includes(w));
   if (vague.length) {
-    dims.terminology -= 10;
-    issues.push(
-      issue(
-        'T-001',
-        '表述不规范',
-        'minor',
-        'present_illness',
-        `存在模糊表述：${vague.join('、')}`,
-        '使用规范医学术语描述症状性质、程度与持续时间',
-      ),
+    dims.terminology -= hit(
+      'T-001',
+      '表述不规范',
+      'present_illness',
+      `存在模糊表述：${vague.join('、')}`,
+      '使用规范医学术语描述症状性质、程度与持续时间',
+      10,
     );
   }
   if (text(record.diagnosis) && !/[A-Z]?\d{2}(\.\d+)?/.test(text(record.diagnosis)) && text(record.diagnosis).length < 6) {
-    dims.accuracy -= 8;
-    issues.push(
-      issue(
-        'A-001',
-        '诊断名称不规范',
-        'major',
-        'diagnosis',
-        '诊断名称过短，无法对应标准疾病编码',
-        '建议使用 ICD-10 标准诊断名称，必要时附编码',
-      ),
+    dims.accuracy -= hit(
+      'A-001',
+      '诊断名称不规范',
+      'diagnosis',
+      '诊断名称过短，无法对应标准疾病编码',
+      '建议使用 ICD-10 标准诊断名称，必要时附编码',
+      8,
     );
   }
 
   // 4. 辅助检查与诊断匹配
   if (text(record.auxiliary_exam) && /正常|未见异常/.test(text(record.auxiliary_exam)) && /炎|感染|骨折|梗死/.test(text(record.diagnosis))) {
-    dims.accuracy -= 10;
-    issues.push(
-      issue(
-        'A-002',
-        '检查结果与诊断不符',
-        'major',
-        'diagnosis',
-        '辅助检查未见异常，但诊断提示炎性/器质性病变',
-        '请复核检查结果或补充影像/实验室依据',
-      ),
+    dims.accuracy -= hit(
+      'A-002',
+      '检查结果与诊断不符',
+      'diagnosis',
+      '辅助检查未见异常，但诊断提示炎性/器质性病变',
+      '请复核检查结果或补充影像/实验室依据',
+      10,
     );
   }
 

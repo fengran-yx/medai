@@ -55,8 +55,14 @@ jobs:
             set -e
             cd /opt/medai/server
             npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmmirror.com
+            echo "--- 数据库增量迁移 ---"
+            node scripts/migrate.js
+            echo "--- 重启服务 ---"
             systemctl restart medai
             sleep 3
             curl -fsS http://127.0.0.1:8801/api/health
             echo
+            echo "--- 校验新版本接口 ---"
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8801/api/reviews/pending)
+            test "$CODE" = "401" || { echo "new API not ready, got $CODE"; exit 1; }
             echo "deploy ok at $(date '+%F %T')"

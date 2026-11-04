@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { one, query } from '../db.js';
-import { requireAuth, audit } from '../middleware/auth.js';
+import { requireAuth, requireRole, audit } from '../middleware/auth.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -18,6 +18,7 @@ router.get('/', async (req, res) => {
     where.push('(v.visit_no LIKE ? OR p.name LIKE ? OR v.diagnosis LIKE ?)');
     params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
   }
+  if (req.user.role === 'clinician') { where.push('v.doctor_id = ?'); params.push(req.user.id); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const totalRow = await one(
     `SELECT COUNT(*) AS total FROM visits v JOIN patients p ON p.id = v.patient_id ${whereSql}`,
@@ -38,8 +39,8 @@ router.get('/', async (req, res) => {
   res.json({ code: 0, data: { list: rows, total: totalRow.total, page, size } });
 });
 
-/** 新建就诊 */
-router.post('/', async (req, res) => {
+/** 新建就诊（挂号/登记处创建，临床医师不可直接建就诊） */
+router.post('/', requireRole('admin', 'quality'), async (req, res) => {
   const { patientId, deptId, visitType, chiefComplaint, diagnosis } = req.body || {};
   if (!patientId || !deptId) return res.status(400).json({ code: 400, message: '患者与科室为必填项' });
   const patient = await one('SELECT id FROM patients WHERE id = ?', [patientId]);

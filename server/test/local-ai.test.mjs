@@ -22,8 +22,45 @@ test('完整病历应达到 A 级或 B 级', () => {
 test('缺少现病史属于严重问题，应扣分并封顶 72', () => {
   const r = localQC({ ...complete, present_illness: '' });
   assert.ok(r.score <= 72, `分数应封顶 72，实际 ${r.score}`);
-  assert.ok(r.issues.some((i) => i.ruleCode === 'C-PRESENT_ILLNESS' && i.severity === 'critical'));
+  assert.ok(r.issues.some((i) => i.ruleCode === 'C-002' && i.severity === 'critical'));
   assert.equal(r.risk, 3);
+});
+
+test('停用规则后该问题不再出现、也不再扣分', () => {
+  const disabled = localQC({ ...complete, present_illness: '' }, {
+    rules: [
+      { code: 'C-001', enabled: 1, weight: 22, severity: 'critical' },
+      { code: 'C-002', enabled: 0, weight: 22, severity: 'critical' },
+      { code: 'C-003', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-004', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-005', enabled: 1, weight: 8, severity: 'minor' },
+      { code: 'C-006', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-007', enabled: 1, weight: 20, severity: 'critical' },
+      { code: 'C-008', enabled: 1, weight: 6, severity: 'minor' },
+    ],
+  });
+  assert.ok(!disabled.issues.some((i) => i.ruleCode === 'C-002'), '停用规则不应再出现在问题清单');
+  const on = localQC({ ...complete, present_illness: '' });
+  assert.ok(on.score < disabled.score, `停用后分数应更高：${disabled.score} vs ${on.score}`);
+});
+
+test('规则权重按比例影响扣分，严重程度以配置为准', () => {
+  const base = localQC({ ...complete, present_illness: '' });
+  const lighter = localQC({ ...complete, present_illness: '' }, {
+    rules: [
+      { code: 'C-001', enabled: 1, weight: 22, severity: 'critical' },
+      { code: 'C-002', enabled: 1, weight: 11, severity: 'major' },
+      { code: 'C-003', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-004', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-005', enabled: 1, weight: 8, severity: 'minor' },
+      { code: 'C-006', enabled: 1, weight: 12, severity: 'major' },
+      { code: 'C-007', enabled: 1, weight: 20, severity: 'critical' },
+      { code: 'C-008', enabled: 1, weight: 6, severity: 'minor' },
+    ],
+  });
+  const issue = lighter.issues.find((i) => i.ruleCode === 'C-002');
+  assert.equal(issue.severity, 'major', '严重程度应跟随配置');
+  assert.ok(lighter.score > base.score, `降权后分数应更高：${lighter.score} vs ${base.score}`);
 });
 
 test('主诉与现病史不一致应被识别', () => {

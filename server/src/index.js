@@ -14,6 +14,9 @@ import dashboardRouter from './routes/dashboard.js';
 import { ruleRouter, logRouter, userRouter } from './routes/admin.js';
 import kbRouter from './routes/kb.js';
 import agentRouter from './routes/agent.js';
+import reviewRouter from './routes/reviews.js';
+import taskRouter from './routes/tasks.js';
+import { recoverInterruptedBatches } from './qc/batch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -43,6 +46,8 @@ app.use('/api/logs', logRouter);
 app.use('/api/users', userRouter);
 app.use('/api/kb', kbRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/reviews', reviewRouter);
+app.use('/api/rectify-tasks', taskRouter);
 
 // 生产模式：托管前端构建产物
 const webDist = path.resolve(__dirname, '../../web/dist');
@@ -62,4 +67,7 @@ app.listen(config.port, config.host, () => {
   console.log(`\n  智医质控 MedAI 服务已启动`);
   console.log(`  接口地址: http://127.0.0.1:${config.port}/api/health`);
   console.log(`  AI 引擎: ${hasRemoteAI ? `DeepSeek (${config.deepseek.model})` : '内置规则引擎（未配置 DEEPSEEK_API_KEY）'}\n`);
+  recoverInterruptedBatches()
+    .then((n) => n && console.log(`  [batch] 已收尾 ${n} 个中断的批量质控任务`))
+    .catch((err) => console.warn('[batch] 启动恢复失败:', err.message));
 });

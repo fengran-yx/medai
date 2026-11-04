@@ -4,6 +4,7 @@
  */
 import { config, hasRemoteAI } from '../config.js';
 import { localQC, localDiagnosis, localChat } from './local.js';
+import { normalizeRules, matchRuleCode } from '../qc/rule-defs.js';
 
 const TIMEOUT_MS = 45_000;
 
@@ -81,12 +82,45 @@ JSON 结构：
 {"score":0-100,"level":"A|B|C|D","dimensions":{"completeness":0-100,"accuracy":0-100,"logic":0-100,"terminology":0-100},
 "risk":0-3,"issues":[{"ruleCode":"C-001","rule":"问题名称","severity":"critical|major|minor","field":"字段名","message":"问题描述","suggestion":"修改建议"}],
 "suggestions":["整改建议"],"summary":"总评，100字以内"}
+ruleCode 请优先使用规则库编码：C-001 主诉缺失、C-002 现病史缺失、C-003 既往史缺失、C-004 体格检查缺失、C-005 辅助检查缺失、C-006 处理意见缺失、C-007 诊断缺失、C-008 字段过于简略、L-001 主诉与现病史不一致、L-002 病程时间缺失、A-001 诊断名称不规范、A-002 检查与诊断不符、T-001 表述不规范；无法归类时用 AI-001。
+质控原则：
+1. 只报告能在病历原文中找到依据的问题；字段已有内容时不得判定为“缺失”；
+2. 需要进一步检查才能确认的，写进 suggestions，不要直接判为“检查缺失”；
+3. 同一问题只报一次，避免重复扣分；
+4. 评分与问题数量匹配，无严重问题不应低于 80 分。
 评分要求：完整性 35%、准确性 30%、逻辑性 20%、规范性 15% 加权；发现缺项、前后矛盾、诊断与检查不符、术语不规范均应扣分。`;
 
-/** 病历质控 */
-export async function runQC(record) {
+/**
+ * 把大模型返回的问题清单对齐到当前规则配置：
+ * - 管理端停用的规则不再出现在报告里；
+ * - 严重程度以管理端配置为准，保证「改规则 → 下次质控生效」。
+ */
+export function applyRulePolicy(report, ruleInput) {
+  const rules = normalizeRules(ruleInput);
+  const issues = (report.issues || [])
+    .map((it) => {
+      const code = matchRuleCode(it);
+      const rule = rules.get(code);
+      return { ...it, ruleCode: code, severity: rule?.severity || it.severity, _rule: rule };
+    })
+    .filter((it) => !it._rule || it._rule.enabled !== 0)
+    .map(({ _rule, ...it }) => it);
+
+  const risk = issues.some((i) => i.severity === 'critical')
+    ? 3
+    : issues.some((i) => i.severity === 'major')
+      ? 2
+      : issues.length
+        ? 1
+        : 0;
+
+  return { ...report, issues, risk };
+}
+
+/** 病历质控（options.rules 传入当前规则 Map，规则页的启停/权重会生效） */
+export async function runQC(record, options = {}) {
   const startedAt = Date.now();
-  const fallback = localQC(record);
+  const fallback = localQC(record, options);
   if (!hasRemoteAI) {
     return { ...fallback, model: 'rule-engine', durationMs: Date.now() - startedAt };
   }
@@ -104,7 +138,11 @@ export async function runQC(record) {
       { json: true },
     );
     const result = normalizeQC(parseJSON(text), fallback);
-    return { ...result, model: config.deepseek.model, durationMs: Date.now() - startedAt };
+    return {
+      ...applyRulePolicy(result, options.rules),
+      model: config.deepseek.model,
+      durationMs: Date.now() - startedAt,
+    };
   } catch (err) {
     console.warn('[ai] 质控调用失败，降级规则引擎:', err.message);
     return { ...fallback, model: 'rule-engine(fallback)', durationMs: Date.now() - startedAt };

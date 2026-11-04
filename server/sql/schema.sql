@@ -13,6 +13,11 @@ USE medai;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS qc_batch_items;
+DROP TABLE IF EXISTS qc_batches;
+DROP TABLE IF EXISTS rectify_tasks;
+DROP TABLE IF EXISTS record_versions;
+DROP TABLE IF EXISTS audit_chain;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS ai_messages;
 DROP TABLE IF EXISTS ai_chats;
@@ -49,6 +54,9 @@ CREATE TABLE users (
   dept_id       BIGINT       DEFAULT NULL,
   phone         VARCHAR(20)  DEFAULT NULL,
   status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1启用 0停用',
+  failed_attempts TINYINT    NOT NULL DEFAULT 0 COMMENT '连续登录失败次数',
+  locked_until  DATETIME     DEFAULT NULL COMMENT '锁定截止时间',
+  token_version INT          NOT NULL DEFAULT 0 COMMENT '会话版本，改密/强制下线时 +1',
   last_login_at DATETIME     DEFAULT NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -122,6 +130,24 @@ CREATE TABLE medical_records (
   CONSTRAINT fk_record_doctor FOREIGN KEY (doctor_id) REFERENCES users (id)
 ) ENGINE=InnoDB COMMENT='电子病历';
 
+-- 病历质控版本快照（每次运行质控时留档，支持整改前后对比）
+CREATE TABLE record_versions (
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  record_id   BIGINT      NOT NULL,
+  version     INT         NOT NULL DEFAULT 1 COMMENT '同一病历内的版本号，从 1 递增',
+  snapshot    JSON        NOT NULL COMMENT '质控时的病历字段快照',
+  dimensions  JSON        DEFAULT NULL COMMENT '四维度得分快照',
+  score       DECIMAL(5,1) DEFAULT NULL,
+  level       VARCHAR(10) DEFAULT NULL,
+  report_id   BIGINT      DEFAULT NULL COMMENT '对应的质控报告ID',
+  source      VARCHAR(20) NOT NULL DEFAULT 'qc' COMMENT 'qc/manual',
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rv_record_version (record_id, version),
+  KEY idx_rv_record_created (record_id, created_at),
+  CONSTRAINT fk_rv_record FOREIGN KEY (record_id) REFERENCES medical_records (id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='病历质控版本快照';
+
 -- 质控规则（规则引擎 + AI 提示词共同使用）
 CREATE TABLE qc_rules (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
@@ -152,12 +178,78 @@ CREATE TABLE qc_reports (
   summary     TEXT        COMMENT 'AI 总评',
   model       VARCHAR(50) DEFAULT NULL,
   duration_ms INT         DEFAULT NULL,
+  prev_score  DECIMAL(5,1) DEFAULT NULL COMMENT '上一次质控得分，便于计算整改提升',
+  score_delta DECIMAL(5,1) DEFAULT NULL COMMENT '本次得分 - 上一次得分',
+  record_version INT      DEFAULT NULL COMMENT '对应的病历版本号',
+  review_status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/confirmed/overridden',
+  reviewer_id   BIGINT      DEFAULT NULL,
+  reviewer_name VARCHAR(50) DEFAULT NULL,
+  reviewed_at   DATETIME    DEFAULT NULL,
+  final_score   DECIMAL(5,1) DEFAULT NULL COMMENT '人工复核后的最终分',
+  review_note   VARCHAR(500) DEFAULT NULL,
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_qc_record (record_id),
   KEY idx_qc_created (created_at),
+  KEY idx_qc_review (review_status, id),
   CONSTRAINT fk_qc_record FOREIGN KEY (record_id) REFERENCES medical_records (id)
 ) ENGINE=InnoDB COMMENT='病历质控报告';
+
+-- 整改任务（AI 质控不通过时自动生成，面向临床医师督办）
+CREATE TABLE rectify_tasks (
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  record_id   BIGINT      NOT NULL,
+  report_id   BIGINT      DEFAULT NULL,
+  doctor_id   BIGINT      DEFAULT NULL,
+  dept_id     BIGINT      DEFAULT NULL,
+  status      VARCHAR(20) NOT NULL DEFAULT 'open' COMMENT 'open/submitted/passed/closed',
+  due_at      DATETIME    NOT NULL COMMENT '整改截止时间',
+  note        VARCHAR(500) DEFAULT NULL,
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  closed_at   DATETIME    DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_task_record (record_id, status),
+  KEY idx_task_status (status, due_at),
+  KEY idx_task_doctor (doctor_id),
+  CONSTRAINT fk_task_record FOREIGN KEY (record_id) REFERENCES medical_records (id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='病历整改任务';
+
+-- 批量质控任务（异步执行，前端轮询进度）
+CREATE TABLE qc_batches (
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT      DEFAULT NULL,
+  user_name   VARCHAR(50) DEFAULT NULL,
+  total       INT         NOT NULL DEFAULT 0,
+  done        INT         NOT NULL DEFAULT 0,
+  failed      INT         NOT NULL DEFAULT 0,
+  improved    INT         NOT NULL DEFAULT 0 COMMENT '分数提升的病历数',
+  avg_delta   DECIMAL(5,1) DEFAULT NULL COMMENT '平均提升分',
+  status      VARCHAR(20) NOT NULL DEFAULT 'queued' COMMENT 'queued/running/done/failed',
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME    DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_batch_user (user_id),
+  KEY idx_batch_created (created_at)
+) ENGINE=InnoDB COMMENT='批量质控任务';
+
+CREATE TABLE qc_batch_items (
+  id         BIGINT      NOT NULL AUTO_INCREMENT,
+  batch_id   BIGINT      NOT NULL,
+  record_id  BIGINT      NOT NULL,
+  status     VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/running/ok/failed',
+  score      DECIMAL(5,1) DEFAULT NULL,
+  level      VARCHAR(10) DEFAULT NULL,
+  report_id  BIGINT      DEFAULT NULL,
+  error      VARCHAR(300) DEFAULT NULL,
+  ms         INT         DEFAULT NULL,
+  updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_batch_item (batch_id, record_id),
+  KEY idx_batch_item_status (batch_id, status),
+  CONSTRAINT fk_bi_batch FOREIGN KEY (batch_id) REFERENCES qc_batches (id) ON DELETE CASCADE,
+  CONSTRAINT fk_bi_record FOREIGN KEY (record_id) REFERENCES medical_records (id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='批量质控明细';
 
 -- AI 辅助诊断会话
 CREATE TABLE diagnosis_sessions (
@@ -198,7 +290,7 @@ CREATE TABLE ai_messages (
   CONSTRAINT fk_msg_chat FOREIGN KEY (chat_id) REFERENCES ai_chats (id) ON DELETE CASCADE
 ) ENGINE=InnoDB COMMENT='AI 消息';
 
--- 审计日志
+-- 审计日志（prev_hash/hash 组成防篡改哈希链）
 CREATE TABLE audit_logs (
   id          BIGINT      NOT NULL AUTO_INCREMENT,
   user_id     BIGINT      DEFAULT NULL,
@@ -208,11 +300,22 @@ CREATE TABLE audit_logs (
   target_id   BIGINT      DEFAULT NULL,
   detail      VARCHAR(500) DEFAULT NULL,
   ip          VARCHAR(45) DEFAULT NULL,
+  prev_hash   CHAR(64)    DEFAULT NULL COMMENT '上一条日志的哈希',
+  hash        CHAR(64)    DEFAULT NULL COMMENT '本条日志哈希',
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_log_created (created_at),
   KEY idx_log_user (user_id)
 ) ENGINE=InnoDB COMMENT='操作审计日志';
+
+-- 审计链头（单行，事务内 FOR UPDATE 串行化写入）
+CREATE TABLE audit_chain (
+  id        TINYINT     NOT NULL DEFAULT 1,
+  last_id   BIGINT      NOT NULL DEFAULT 0,
+  last_hash CHAR(64)    NOT NULL DEFAULT '',
+  updated_at DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB COMMENT='审计哈希链头';
 
 -- ============================================================
 -- RAG 知识库（检索增强生成）

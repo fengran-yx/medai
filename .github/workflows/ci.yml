@@ -131,6 +131,58 @@ jobs:
           curl -fsS -X POST http://127.0.0.1:8801/api/records/1/qc -H "Authorization: Bearer $TOKEN" \
             | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||typeof j.data.score!=='number'){console.error('bad qc response');process.exit(1)}console.log('qc score:',j.data.score,'level:',j.data.level)})"
 
+          echo "--- second QC + version compare ---"
+          curl -fsS -X POST http://127.0.0.1:8801/api/records/1/qc -H "Authorization: Bearer $TOKEN" > /dev/null
+          curl -fsS http://127.0.0.1:8801/api/records/1/versions/compare -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||!j.data||typeof j.data.scoreDelta!=='number'){console.error('bad compare',s.slice(0,200));process.exit(1)}console.log('compare delta:',j.data.scoreDelta,'changed fields:',j.data.changedFields.length)})"
+
+          echo "--- batch QC ---"
+          BID=$(curl -fsS -X POST http://127.0.0.1:8801/api/records/batch-qc \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"recordIds":[2,3]}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||!j.data.batchId){console.error('bad batch',s);process.exit(1)}console.log(j.data.batchId)})")
+          STATUS=queued
+          for i in $(seq 1 30); do
+            STATUS=$(curl -fsS http://127.0.0.1:8801/api/records/batch-qc/$BID -H "Authorization: Bearer $TOKEN" \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{console.log(JSON.parse(s).data.status)})")
+            if [ "$STATUS" = "done" ]; then break; fi
+            sleep 1
+          done
+          test "$STATUS" = "done" || { echo "batch status: $STATUS"; exit 1; }
+          curl -fsS http://127.0.0.1:8801/api/records/batch-qc/$BID -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=JSON.parse(s).data;if(d.done!==2){console.error('batch items not done',d.done);process.exit(1)}console.log('batch done:',d.done,'avg delta:',d.avg_delta)})"
+
+          echo "--- CSV export ---"
+          curl -fsS "http://127.0.0.1:8801/api/records/export.csv?status=qc_failed" -H "Authorization: Bearer $TOKEN" -o /tmp/records.csv
+          node -e "const b=require('fs').readFileSync('/tmp/records.csv');if(b[0]!==0xef||b[1]!==0xbb||b[2]!==0xbf){console.error('csv missing BOM');process.exit(1)}console.log('csv bytes:',b.length)"
+
+          echo "--- rules usage ---"
+          curl -fsS http://127.0.0.1:8801/api/rules/usage -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||typeof j.data['C-001']!=='number'){console.error('bad rule usage',s.slice(0,200));process.exit(1)}console.log('rule usage C-001:',j.data['C-001'])})"
+
+          echo "--- review workbench + override ---"
+          RID=$(curl -fsS http://127.0.0.1:8801/api/reviews/pending -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||!j.data.list.length){console.error('no pending review',s.slice(0,200));process.exit(1)}console.log(j.data.list[0].id)})")
+          curl -fsS -X POST http://127.0.0.1:8801/api/reviews/$RID -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"action":"override","score":90,"note":"CI 复核通过"}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||j.data.finalScore!==90||j.data.recordStatus!=='qc_passed'){console.error('bad review',s.slice(0,300));process.exit(1)}console.log('review final:',j.data.finalScore,j.data.recordStatus)})"
+
+          echo "--- rectify tasks ---"
+          curl -fsS http://127.0.0.1:8801/api/rectify-tasks -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||typeof j.data.summary.pending!=='number'){console.error('bad tasks',s.slice(0,200));process.exit(1)}console.log('tasks pending:',j.data.summary.pending)})"
+
+          echo "--- audit chain verify ---"
+          curl -fsS http://127.0.0.1:8801/api/logs/verify -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.code!==0||j.data.ok!==true){console.error('bad audit chain',s.slice(0,300));process.exit(1)}console.log('audit checked:',j.data.checked)})"
+
+          echo "--- clinician forbidden from audit logs ---"
+          DOC=$(curl -fsS -X POST http://127.0.0.1:8801/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"doctor","password":"doc123456"}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(j.data.token)})")
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8801/api/logs -H "Authorization: Bearer $DOC")
+          test "$CODE" = "403" || { echo "expected 403 for clinician logs, got $CODE"; exit 1; }
+
           echo "--- ai diagnosis ---"
           curl -fsS -X POST http://127.0.0.1:8801/api/ai/diagnosis \
             -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \

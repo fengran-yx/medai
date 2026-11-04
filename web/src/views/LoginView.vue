@@ -20,7 +20,7 @@
         </ul>
         <div class="stats">
           <div><strong>36</strong><em>演示病历</em></div>
-          <div><strong>12</strong><em>质控规则</em></div>
+          <div><strong>14</strong><em>质控规则</em></div>
           <div><strong>3</strong><em>角色权限</em></div>
         </div>
       </div>

@@ -21,7 +21,7 @@
 > 部署：阿里云 ECS · Ubuntu 22.04 · Nginx 反代 · systemd 常驻 · Cloudflare + ngrok 双通道
 账号：`quality / qc123456`（质控医师）、`doctor / doc123456`（临床医师）、`admin / admin123`（管理员）
 
-**状态**：核心功能可用 · CI 全绿（单测 + 集成冒烟 + 前端构建）· 含 36 份演示病历与完整部署脚本
+**状态**：核心功能可用 · CI 全绿（43 个后端单测 + 集成冒烟 + 前端构建）· 含人工复核、整改督办、审计哈希链与 36 份演示病历
 
 ![质控驾驶舱](docs/screenshots/dashboard.png)
 
@@ -41,7 +41,27 @@
 | --- |
 | ![Agent](docs/screenshots/agent.png) |
 
+| 质控工作台（待复核 / 整改督办） | 人工复核 / 终审 |
+| --- | --- |
+| ![质控工作台](docs/screenshots/new/workbench.png) | ![复核终审](docs/screenshots/new/record-review.png) |
+
+| 审计哈希链校验 | 质控整改闭环（版本对比） |
+| --- | --- |
+| ![审计校验](docs/screenshots/new/logs-verify.png) | ![整改闭环](docs/screenshots/new/record-loop.png) |
+
+| 批量质控 | 质控报告导出（打印 / PDF） |
+| --- | --- |
+| ![批量质控](docs/screenshots/new/records-batch.png) | ![质控报告](docs/screenshots/new/report-print.png) |
+
+| 规则命中统计 |
+| --- |
+| ![规则命中](docs/screenshots/new/rules-usage.png) |
+
 > 想按代码执行顺序逐步理解实现？看 **[docs/代码导读.md](docs/代码导读.md)**（从建表 SQL 到一次 AI 质控的完整链路）。
+>
+> 想了解整改闭环、批量质控与规则热生效？看 **[docs/质控闭环.md](docs/质控闭环.md)**。
+>
+> 想了解人工复核、整改督办、审计哈希链与医院部署清单？看 **[docs/医院落地.md](docs/医院落地.md)**。
 >
 > 想快速看效果？**[讲解版演示视频](docs/智医质控-MedAI-讲解版.mp4)**（3 分 12 秒，中文配音，走完登录→质控→诊断→问答全流程）；也有 [1 分 21 秒纯字幕版](docs/演示视频.mp4)。
 
@@ -74,9 +94,13 @@ DB_NAME=medai
 ```bash
 cd server
 npm install
-npm run db:init     # 创建 medai 库与 10 张表
+npm run db:init     # 创建 medai 库与 20 张表
 npm run db:seed     # 写入 20 位患者、36 份病历、质控报告等演示数据
 ```
+
+> 已有旧版数据库（升级代码但不想重建数据）时，执行 `npm run db:migrate`：
+> 幂等补齐版本快照、批量质控、整改任务、复核字段、审计哈希链、登录锁定字段与新增规则，不会清空业务数据。
+> 如清洗过审计日志，再执行 `npm run audit:rebuild` 重建哈希链。
 
 ### 3. 启动后端（端口 8801）
 
@@ -111,16 +135,23 @@ npm run dev
 
 | 模块 | 说明 |
 | --- | --- |
-| 质控驾驶舱 | 患者数、今日病历、30 天平均分、通过率、待处理；趋势图 / 科室分布 / 高频问题 / 最近质控 |
-| 病历质控 | 病历列表（状态、科室、关键词筛选）→ 一键 AI 质控 → 四维度评分 + 问题清单 + 整改建议 |
-| 病历详情 | 结构化字段编辑（主诉 / 现病史 / 既往史 / 查体 / 辅助检查 / 诊断 / 处理意见），质控历史时间线 |
+| 质控驾驶舱 | 患者数、今日病历、30 天平均分、通过率、待处理、待复核、整改逾期；趋势图 / 科室分布 / 高频问题 / 最近质控 |
+| 质控工作台 | 待复核队列（按 AI 分从低到高）+ 整改任务督办（状态 / 截止 / 逾期）+ 一键复核 |
+| 人工复核与终审 | AI 只作初筛：质控医师可确认 AI 结果或人工改判，形成最终分并同步病历状态、整改任务 |
+| 整改任务 | AI 不通过自动建单，带承办医师、科室、截止时间；复评通过自动关闭，质控科可人工关闭 |
+| 审计防篡改 | 所有关键操作写入 SHA-256 哈希链，支持一键校验完整性、导出审计 CSV |
+| 登录与会话安全 | 密码策略、连续失败锁定、管理员解锁、强制下线、改密后旧 token 失效 |
+| 病历质控 | 病历列表（状态、科室、关键词筛选）→ 一键 / 批量 AI 质控 → 四维度评分 + 问题清单 + 整改建议；支持按筛选条件导出 CSV |
+| 病历详情 | 结构化字段编辑（主诉 / 现病史 / 既往史 / 查体 / 辅助检查 / 诊断 / 处理意见），质控历史时间线，整改前后版本对比，复核面板 |
+| 质控整改闭环 | 每次质控留档版本，复评自动计算分数提升、四维度变化与逐字段 diff，形成“质控 → 整改 → 复评”证据链 |
+| 质控报告导出 | 独立打印页，浏览器「打印 / 另存为 PDF」即可交付，含最终分、复核状态、问题清单、整改建议与签名栏 |
 | 患者管理 | 患者主索引、就诊档案抽屉、新增 / 编辑 |
 | AI 辅助诊断 | 症状 + 检查 → 鉴别诊断（含 ICD-10）、建议检查、危险信号、分诊建议 |
 | AI 医学助手 | 多会话问答，落库保存历史 |
 | 知识库问答（RAG） | 病历书写规范 / 质控规则 / 核心制度 / 缺陷案例入库 → 混合检索 → 带引用回答 |
 | AI 质控助手（Agent） | 自然语言下指令 → 模型自主规划 → 调用工具（查病历 / 跑质控 / 出统计）→ 汇总答复 |
-| 质控规则 | 12 条规则，按完整性 / 准确性 / 逻辑性 / 规范性分类，可启停与调权重 |
-| 操作日志 | 登录、质控、建档、诊断、规则调整全留痕 |
+| 质控规则 | 14 条规则，按完整性 / 准确性 / 逻辑性 / 规范性分类，可启停、调权重与严重度；修改后下一次质控立即生效，并展示近 30 天命中次数 |
+| 操作日志 | 登录、质控、批量质控、建档、诊断、规则调整全留痕 |
 | 用户管理 | 新增账号、改角色 / 科室、启停、重置密码 |
 
 ---
@@ -248,6 +279,102 @@ CI 里这一步设了门槛：`Recall@3 < 90%` 直接让流水线失败，防止
 
 ---
 
+## 三·七、质控整改闭环与批量质控
+
+### 1. 为什么要做「版本」而不是只存报告
+
+一份病历的质控价值不在单次得分，而在**改没改、改完有没有变好**。因此每次质控都会：
+
+```
+读取病历 → 运行 AI/规则引擎 → 写 qc_reports
+        → 快照当前 7 个正文字段到 record_versions（版本号、四维得分、报告ID）
+        → 与上一次得分比较，写入 prev_score / score_delta
+```
+
+医生按建议修改后重新质控，前端直接对比最近两个版本：
+
+- **总分**：42 → 88，`+46`；
+- **四维度**：完整性 20 → 72、逻辑性 25 → 80……
+- **字段级 diff**：7 个字段的修改前 / 修改后全文对照；
+- **问题追踪**：当前问题清单中，`field` 在 diff 里的会标记「本轮已修改」。
+
+对应接口：`GET /records/:id/versions`、`GET /records/:id/versions/compare?from=1&to=2`。演示环境里孙丽娟（病历 27）就是一条完整链路：42 分 D → 补全现病史/查体/检查/诊断 → 88 分 B。
+
+### 2. 批量质控为什么用任务表
+
+20 份病历串行跑大模型会超过网关超时，所以做成**异步任务**：
+
+```
+POST /records/batch-qc { recordIds: [...] }
+  → 建 qc_batches + qc_batch_items → 立即返回 batchId
+  → 进程内并发 2 逐条执行，每完成一条更新 done/failed
+前端每 1.5s 轮询 GET /records/batch-qc/:id
+  → 进度条 + 每份病历的状态/分数/耗时/失败原因
+```
+
+约束与兜底：单次上限 20 份、同一病历已在队列中会跳过、临床医师只能操作本人病历、服务重启时把 `queued/running` 任务标记为失败并在启动日志提示，避免前端永远转圈。
+
+### 3. 规则不是摆设：改完立即生效
+
+`qc_rules` 里的启停 / 权重 / 严重度会真实进入评分：
+
+- 规则引擎（`local.js`）按规则编码命中，**停用则不扣分、不出问题**；权重按 `当前权重 / 默认权重` 缩放扣分；
+- 大模型返回的 `ruleCode` 先经 `matchRuleCode()` 做语义对齐（避免模型把“主诉与现病史不符”也套成 C-001），再按当前配置过滤与覆盖严重度；
+- 规则页展示近 30 天每条规则的命中次数，管理端能判断“这条规则到底有没有用”。
+
+规则缓存 10 秒，管理端保存后主动失效，下一次质控立即使用新配置。
+
+### 4. 交付物：报告与清单
+
+- **质控报告**：独立路由 `/records/:id/report`，A4 排版，浏览器打印即可「另存为 PDF」，含患者信息、评分、四维条形图、问题表、整改建议、质控留痕与签名栏；
+- **病历清单**：`GET /records/export.csv`，带 UTF-8 BOM，Excel 直接打开不乱码；导出同样遵守临床医师的数据权限与当前筛选条件。
+
+---
+
+## 三·八、从演示到医院的治理补强
+
+AI 质控进医院，难点不是“能不能打分”，而是**谁对结果负责、整改有没有人跟、日志能不能自证没被改、账号被盗能不能兜底**。这一版补了四件事。
+
+### 1. AI 只是初筛，质控医师终审
+
+- 每次质控报告默认 `review_status = pending`，`final_score = null`；
+- 质控工作台按 AI 分从低到高排出待复核队列；
+- 质控医师可「确认 AI 结果」或「人工改判」（填写 0-100 分与复核意见）；
+- 最终分决定病历 `qc_passed / qc_failed`，并驱动整改任务；
+- 只允许复核该病历**最新一次**报告，避免拿旧报告改当前状态；
+- 每次复核/改判写入审计日志，报告打印页展示最终分、复核人、复核意见。
+
+### 2. 整改任务必须有人、有截止时间
+
+- AI 质控 <80 分自动建单：承办医师 = 病历经治医师，科室 = 就诊科室，默认 3 天截止（`RECTIFY_DUE_DAYS` 可配）；
+- 复评 ≥80 分自动关闭；质控科也可人工关闭并留说明；
+- 工作台按“逾期优先、截止时间升序”排序，看板显示待整改/逾期数；
+- 同一病历不会重复建单，重新质控只更新关联报告。
+
+![质控工作台](docs/screenshots/new/workbench.png)
+
+![复核/终审](docs/screenshots/new/record-review.png)
+
+### 3. 审计日志防篡改
+
+- 每条审计日志：`hash = sha256(prev_hash + 规范化字段)`，写入 `audit_chain` 单行链头；
+- 并发写入（批量质控 2 个 worker）通过 `SELECT ... FOR UPDATE` 串行化，不会写断链；
+- `GET /logs/verify` 全量重算并比对链头，返回 `ok / checked / brokenId / reason`；
+- 支持审计 CSV 导出；清洗历史数据后可用 `npm run audit:rebuild` 重建链。
+
+![审计校验](docs/screenshots/new/logs-verify.png)
+
+### 4. 登录与会话安全
+
+- 密码策略：8-64 位、必须字母+数字、不能包含登录名、常见弱口令拦截；
+- 连续 5 次失败锁定 15 分钟（`LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES`），管理员可解锁；
+- `users.token_version` 实现会话失效：改密/管理员重置/强制下线后，旧 token 立即 401；
+- 操作日志与复核队列仅质控/管理员可见；临床医师仍只能看本人病历与本人整改任务。
+
+> **必须说清楚**：代码层面这些是“可落地的治理骨架”，但真正进医院还需要 HIS/EMR 接口对接（HL7/FHIR 或视图库）、等保/数据安全评估、真实病历脱敏与 UAT、ICD/术语字典映射、临床专家对规则与阈值的签字确认、以及明确 AI 辅助不替代医师责任的制度文件。本项目不声称已满足任何合规认证。
+
+---
+
 ## 四、目录结构
 
 ```
@@ -256,9 +383,10 @@ medai/
 │   ├── .env                    # 数据库 / JWT / DeepSeek 配置
 │   ├── package.json
 │   ├── sql/
-│   │   └── schema.sql          # 10 张表的建表脚本
+│   │   └── schema.sql          # 20 张表的建表脚本
 │   ├── scripts/
 │   │   ├── init-db.js          # 建库建表
+│   │   ├── migrate.js          # 旧库增量迁移（幂等，不丢数据）
 │   │   └── seed.js             # 演示数据（bcrypt 密码、质控报告、日志）
 │   └── src/
 │       ├── index.js            # Express 入口、路由挂载、静态托管
@@ -268,6 +396,13 @@ medai/
 │       ├── ai/
 │       │   ├── index.js        # DeepSeek 调用 + 结构化校验 + 降级 + RAG 生成
 │       │   └── local.js        # 规则引擎（质控 / 诊断 / 问答）
+│       ├── qc/                 # 质控闭环
+│       │   ├── service.js      # 单次质控统一入口（报告 + 状态 + 版本快照）
+│       │   ├── versions.js     # 版本留档、字段级 diff、分数增量
+│       │   ├── batch.js        # 批量质控任务队列 + 中断恢复
+│       │   ├── rules.js        # 规则读取 / 缓存 / 命中统计
+│       │   ├── rule-defs.js    # 默认规则、编码归一、AI 问题码语义对齐
+│       │   └── csv.js          # CSV 转义与导出
 │       ├── kb/                 # RAG 知识库
 │       │   ├── tokenize.js     # 中文单字+双字分词、按【小节】切块
 │       │   ├── search.js       # BM25 + TF-IDF 余弦混合检索
@@ -276,10 +411,10 @@ medai/
 │           ├── auth.js         # 登录、当前用户、改密码
 │           ├── patients.js     # 患者 CRUD
 │           ├── visits.js       # 就诊 + 科室字典
-│           ├── records.js      # 病历 CRUD + AI 质控 + 质控历史
+│           ├── records.js      # 病历 CRUD + 单条/批量质控 + 版本对比 + CSV 导出
 │           ├── ai.js           # 辅助诊断、多轮问答、会话管理
-│           ├── dashboard.js    # 看板聚合查询
-│           └── admin.js        # 规则、日志、用户
+│           ├── dashboard.js    # 看板聚合 + 整改闭环指标
+│           └── admin.js        # 规则（含命中统计）、日志、用户
 └── web/                        # 前端
     ├── vite.config.ts          # /api 代理到 8801
     └── src/
@@ -289,26 +424,34 @@ medai/
         ├── stores/auth.ts      # 登录态
         ├── router/index.ts     # 路由 + 登录/角色守卫
         ├── layout/MainLayout.vue
-        ├── components/QCPanel.vue   # 质控报告展示组件
-        └── views/              # 9 个页面
+        ├── components/QCPanel.vue   # 质控报告展示组件（含分差 / 已修改标记）
+        └── views/              # 14 个页面（含质控工作台与报告打印页）
 ```
 
 ---
 
-## 五、数据库设计（10 张表）
+## 五、数据库设计（20 张表）
 
 | 表 | 作用 | 关键点 |
 | --- | --- | --- |
 | `departments` | 科室字典 | 临床 / 医技 / 管理分类 |
-| `users` | 用户 | bcrypt 密码、三种角色、状态 |
+| `users` | 用户 | bcrypt 密码、三种角色、登录锁定、token_version 会话失效 |
 | `patients` | 患者主索引 | 病案号唯一、过敏史 |
 | `visits` | 就诊记录 | 就诊流水号、就诊类型 |
 | `medical_records` | 电子病历 | 7 个结构化字段 + 状态机 |
+| `record_versions` | 质控版本快照 | 每次质控的正文快照、四维得分、报告ID，支撑整改 diff |
 | `qc_rules` | 质控规则 | 维度 / 严重程度 / 权重 / 启停 |
-| `qc_reports` | 质控报告 | 总分、四维度分、`issues` JSON、模型、耗时 |
+| `qc_reports` | 质控报告 | AI 分、最终分、`review_status`、复核人、问题 JSON、分差 |
+| `rectify_tasks` | 整改任务 | 承办医师 / 科室 / 截止时间 / 状态，支撑督办与逾期统计 |
+| `qc_batches` | 批量质控任务 | 总数 / 完成 / 失败 / 平均提升 / 状态 |
+| `qc_batch_items` | 批量质控明细 | 每份病历的状态、分数、报告ID、失败原因 |
 | `diagnosis_sessions` | 辅助诊断记录 | 入参 + 结果 JSON |
 | `ai_chats` / `ai_messages` | AI 会话与消息 | 多轮上下文 |
-| `audit_logs` | 审计日志 | 操作人、动作、对象、IP |
+| `audit_logs` | 审计日志 | 操作人、动作、对象、IP、`prev_hash` / `hash` |
+| `audit_chain` | 审计链头 | 单行链头，事务内 `FOR UPDATE` 串行写入 |
+| `kb_documents` / `kb_chunks` | 知识库文档与分块 | 稀疏向量、小节切块 |
+| `kb_qa_logs` | 知识库问答记录 | 问题 / 答案 / 引用 / 耗时 |
+| `agent_runs` | Agent 运行记录 | 工具调用序列、最终答复，可回放 |
 
 > 所有表 `ENGINE=InnoDB`、`utf8mb4`，外键约束齐全；`issues` 用 JSON 列存储，前端直接消费。
 
@@ -328,8 +471,13 @@ medai/
 | GET | `/departments` | 科室字典 |
 | GET/POST | `/records` | 病历分页 / 新建 |
 | GET/PUT | `/records/:id` | 病历详情 / 保存 |
-| POST | `/records/:id/qc` | **运行 AI 质控** |
-| GET | `/records/:id/qc-history` | 质控历史 |
+| POST | `/records/:id/qc` | **运行 AI 质控（返回分差与版本号）** |
+| GET | `/records/:id/qc-history` | 质控历史（含 `prev_score` / `score_delta`） |
+| POST | `/records/batch-qc` | **批量质控任务（异步，最多 20 份）** |
+| GET | `/records/batch-qc/:id` | 批量任务进度 + 每份病历明细 |
+| GET | `/records/:id/versions` | 质控版本列表 |
+| GET | `/records/:id/versions/compare` | **整改前后字段级对比** |
+| GET | `/records/export.csv` | 按当前筛选导出病历清单 CSV |
 | POST | `/ai/diagnosis` | **AI 辅助诊断** |
 | POST | `/kb/ask` | **知识库问答（检索 + 生成 + 引用）** |
 | GET | `/kb/search?q&topK` | 只检索不生成（调试召回） |
@@ -342,9 +490,17 @@ medai/
 | POST | `/ai/chat` | 多轮问答 |
 | GET | `/ai/chats` `/ai/chats/:id/messages` | 会话列表 / 消息 |
 | GET | `/dashboard/overview` `trends` `dept-distribution` `issue-categories` `recent-qc` | 看板 |
-| GET/PUT | `/rules` `/rules/:id` | 规则 |
-| GET | `/logs` | 审计日志 |
-| GET/POST/PUT | `/users` | 用户管理（仅 admin） |
+| GET | `/dashboard/rectification` | **整改闭环指标 + 待整改列表** |
+| GET/PUT | `/rules` `/rules/:id` | 规则（修改后立即生效） |
+| GET | `/rules/usage` | 近 30 天各规则命中次数 |
+| GET | `/reviews/pending` | **待复核队列（仅质控/管理员）** |
+| POST | `/reviews/:reportId` | **确认 / 改判质控报告** |
+| GET | `/rectify-tasks` | **整改任务列表（含逾期计算）** |
+| POST | `/rectify-tasks/:id/close` | 人工关闭整改任务 |
+| GET | `/logs` | 审计日志（仅质控/管理员） |
+| GET | `/logs/verify` | **校验审计哈希链完整性** |
+| GET | `/logs/export.csv` | 导出审计日志 CSV |
+| GET/POST/PUT | `/users` | 用户管理（仅 admin，支持解锁 / 强制下线） |
 
 统一响应：`{ code: 0, data, message? }`，`code` 非 0 时前端拦截器自动提示。
 
@@ -368,6 +524,7 @@ cd web && npm run build          # 产物 web/dist
 cd server && npm start           # 自动托管 web/dist，单端口 8801
 ```
 
+- 已有数据库升级：先 `cd server && npm run db:migrate`，再重启服务；
 - 反代示例（Nginx）：`location / { proxy_pass http://127.0.0.1:8801; }`
 - 必须修改：`JWT_SECRET`、数据库密码、`DEEPSEEK_API_KEY`
 - 建议补充：HTTPS、登录失败次数限制、患者数据脱敏、数据库定期备份
@@ -383,6 +540,12 @@ cd server && npm start           # 自动托管 web/dist，单端口 8801
 | 防火墙 | ufw 仅放行 22/80/443 |
 | 端口暴露 | 8801 / 3306 仅监听 127.0.0.1 |
 | 登录限流 | 同 IP 15 分钟 10 次 |
+| 账号锁定 | 连续 5 次失败锁定 15 分钟，管理员可解锁/强制下线 |
+| 会话失效 | 改密、重置密码、强制下线后旧 token 立即失效（token_version） |
+| 审计防篡改 | SHA-256 哈希链 + 全量校验 + CSV 导出；可用 `npm run audit:rebuild` 运维重建 |
+| AI 责任边界 | AI 只作初筛，质控医师确认/改判后才形成最终分；报告标注复核人 |
+| 权限边界 | 复核队列/审计日志仅质控与管理员；临床医师仅本人病历、本人患者与本人任务 |
+| 数据范围 | 临床医师按 `doctor_id` 过滤病历/就诊/患者，直接猜 ID 访问他人病历返回 403；患者与就诊主数据仅质控/管理员可新建 |
 | 自动更新 | unattended-upgrades 每日打补丁 |
 | 备份 | 每日 03:30 自动备份，保留 14 天，已做恢复演练 |
 | HTTPS | Cloudflare 隧道（证书自动） |
@@ -391,4 +554,4 @@ cd server && npm start           # 自动托管 web/dist，单端口 8801
 
 ## 十、免责声明
 
-本项目为教学 / 演示用途，AI 输出不构成诊疗建议。真实医疗场景使用需通过等保测评、数据安全评估，并建立医师复核机制；请勿录入真实患者隐私数据。
+本项目为教学 / 医院信息化原型，AI 输出不构成诊疗建议。当前版本已内置“AI 初筛 + 质控医师复核/改判”的责任链，但真实医疗场景仍必须完成等保测评、数据安全评估、HIS/EMR 接口对接、临床 UAT 与制度备案；请勿直接录入真实患者隐私数据。

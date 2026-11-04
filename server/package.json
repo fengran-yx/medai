@@ -9,7 +9,9 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:init": "node scripts/init-db.js",
+    "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
+    "audit:rebuild": "node scripts/audit-rebuild.js",
     "kb:seed": "node scripts/seed-kb.js",
     "eval:rag": "node scripts/eval-rag.js",
     "test": "node --test test/*.test.mjs"

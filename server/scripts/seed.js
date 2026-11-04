@@ -2,6 +2,7 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { localQC } from '../src/ai/local.js';
+import { hashAudit } from '../src/audit/hash.js';
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
@@ -91,6 +92,8 @@ const RULES = [
   ['C-004', '体格检查缺失', 'completeness', 'major', 12, '需记录生命体征与专科查体'],
   ['C-005', '辅助检查缺失', 'completeness', 'minor', 8, '有检查结果时应完整记录'],
   ['C-006', '处理意见缺失', 'completeness', 'major', 12, '需明确治疗方案与随访计划'],
+  ['C-007', '诊断缺失', 'completeness', 'critical', 20, '诊断是病历核心要素，缺失将导致质控不通过'],
+  ['C-008', '病历字段过于简略', 'completeness', 'minor', 6, '各字段应包含足够信息量，避免一句话带过'],
   ['L-001', '主诉与现病史不一致', 'logic', 'major', 12, '现病史应围绕主诉展开'],
   ['L-002', '病程时间描述缺失', 'logic', 'major', 8, '现病史需写明起病时间与病程'],
   ['A-001', '诊断名称不规范', 'accuracy', 'major', 8, '应使用 ICD-10 标准诊断名称'],
@@ -103,7 +106,7 @@ async function main() {
   const conn = await pool.getConnection();
   try {
     await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-    for (const t of ['audit_logs', 'ai_messages', 'ai_chats', 'diagnosis_sessions', 'qc_reports', 'qc_rules', 'medical_records', 'visits', 'patients', 'users', 'departments']) {
+    for (const t of ['qc_batch_items', 'qc_batches', 'rectify_tasks', 'record_versions', 'audit_chain', 'audit_logs', 'ai_messages', 'ai_chats', 'diagnosis_sessions', 'qc_reports', 'qc_rules', 'medical_records', 'visits', 'patients', 'users', 'departments']) {
       await conn.query(`TRUNCATE TABLE ${t}`);
     }
     await conn.query('SET FOREIGN_KEY_CHECKS = 1');
@@ -209,7 +212,7 @@ async function main() {
 
       const qc = localQC(record);
       const qcTime = fmt(new Date(new Date(visitTime).getTime() + 3600_000));
-      await conn.query(
+      const [qr] = await conn.query(
         `INSERT INTO qc_reports
          (record_id, score, level, dim_completeness, dim_accuracy, dim_logic, dim_terminology,
           risk, issues, suggestions, summary, model, duration_ms, created_at)
@@ -221,11 +224,55 @@ async function main() {
           randInt(120, 480), qcTime,
         ],
       );
+      await conn.query(
+        `INSERT INTO record_versions
+         (record_id, version, snapshot, dimensions, score, level, report_id, source, created_at)
+         VALUES (?, 1, ?, ?, ?, ?, ?, 'qc', ?)`,
+        [
+          rr.insertId, JSON.stringify(record), JSON.stringify(qc.dimensions),
+          qc.score, qc.level, qr.insertId, qcTime,
+        ],
+      );
       await conn.query('UPDATE medical_records SET status = ?, updated_at = ? WHERE id = ?', [
         qc.score >= 80 ? 'qc_passed' : 'qc_failed', visitTime, rr.insertId,
       ]);
     }
-    console.log(`✔ 就诊/病历 ${recordIds.length} 份（含 AI 质控报告）`);
+    console.log(`✔ 就诊/病历 ${recordIds.length} 份（含 AI 质控报告与初始版本）`);
+
+    // 历史报告视为已复核；保留 4 份最近的不通过病历进入待复核队列，便于演示复核工作台
+    await conn.query(
+      `UPDATE qc_reports
+       SET review_status = 'confirmed', reviewer_id = ?, reviewer_name = '李静',
+           reviewed_at = DATE_ADD(created_at, INTERVAL 2 HOUR), final_score = score`,
+      [userIds.quality],
+    );
+    const [pendingReports] = await conn.query(
+      `SELECT q.id FROM qc_reports q
+       JOIN (SELECT record_id, MAX(id) AS id FROM qc_reports GROUP BY record_id) m ON m.id = q.id
+       JOIN medical_records mr ON mr.id = q.record_id
+       WHERE mr.status = 'qc_failed'
+       ORDER BY q.id DESC LIMIT 4`,
+    );
+    if (pendingReports.length) {
+      const ids = pendingReports.map((r) => r.id);
+      await conn.query(
+        `UPDATE qc_reports SET review_status = 'pending', reviewer_id = NULL, reviewer_name = NULL,
+         reviewed_at = NULL, final_score = NULL WHERE id IN (?)`,
+        [ids],
+      );
+    }
+
+    // 为不通过病历建整改任务；每 5 条制造一条逾期，便于看板展示督办效果
+    await conn.query(
+      `INSERT INTO rectify_tasks (record_id, report_id, doctor_id, dept_id, status, due_at)
+       SELECT mr.id, q.id, mr.doctor_id, v.dept_id, 'open', DATE_ADD(NOW(), INTERVAL 3 DAY)
+       FROM medical_records mr
+       JOIN visits v ON v.id = mr.visit_id
+       JOIN qc_reports q ON q.id = (SELECT MAX(q2.id) FROM qc_reports q2 WHERE q2.record_id = mr.id)
+       WHERE mr.status = 'qc_failed'`,
+    );
+    await conn.query('UPDATE rectify_tasks SET due_at = DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id % 5 = 0');
+    console.log(`✔ 待复核报告 ${pendingReports.length} 份，整改任务已生成`);
 
     // 辅助诊断历史
     for (let i = 0; i < 8; i++) {
@@ -250,7 +297,7 @@ async function main() {
       '老年患者使用 ACEI 类药物的要点：\n1. 起始剂量宜小，逐步滴定，避免首剂低血压；\n2. 用药前及用药后 1-2 周监测血肌酐与血钾；\n3. 双侧肾动脉狭窄、高钾血症、妊娠患者禁用；\n4. 出现干咳可考虑换用 ARB。\n\n具体方案请结合患者肾功能与合并用药，由主管医师决定。',
     ]);
 
-    // 审计日志
+    // 审计日志（同时构建防篡改哈希链）
     const actions = [
       ['login', 'user', '登录系统'],
       ['record.qc', 'record', 'AI 质控得分 86.5（B级）'],
@@ -258,15 +305,34 @@ async function main() {
       ['ai.diagnosis', 'diagnosis', '辅助诊断：发热咳嗽 3 天'],
       ['rule.update', 'qc_rule', '更新规则 主诉缺失'],
     ];
+    let lastAuditId = 0;
+    let lastAuditHash = '';
     for (let i = 0; i < 40; i++) {
       const [action, type, detail] = pick(actions);
-      await conn.query(
-        'INSERT INTO audit_logs (user_id, user_name, action, target_type, target_id, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [userIds.quality, '李静', action, type, randInt(1, 30), detail, '127.0.0.1', fmt(daysAgo(randInt(0, 6)))],
+      const createdAt = fmt(daysAgo(randInt(0, 6)));
+      const row = {
+        user_id: userIds.quality,
+        user_name: '李静',
+        action,
+        target_type: type,
+        target_id: randInt(1, 30),
+        detail,
+        ip: '127.0.0.1',
+        created_at: createdAt,
+      };
+      const hash = hashAudit(row, lastAuditHash);
+      const [r] = await conn.query(
+        `INSERT INTO audit_logs
+         (user_id, user_name, action, target_type, target_id, detail, ip, prev_hash, hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.user_id, row.user_name, row.action, row.target_type, row.target_id, row.detail, row.ip, lastAuditHash, hash, createdAt],
       );
+      lastAuditHash = hash;
+      lastAuditId = r.insertId;
     }
+    await conn.query('INSERT INTO audit_chain (id, last_id, last_hash) VALUES (1, ?, ?)', [lastAuditId, lastAuditHash]);
 
-    console.log('✔ 辅助诊断 / AI 会话 / 审计日志已生成');
+    console.log('✔ 辅助诊断 / AI 会话 / 审计日志（哈希链）已生成');
   } finally {
     conn.release();
     await pool.end();

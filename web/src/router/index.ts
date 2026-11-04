@@ -9,11 +9,18 @@ const routes = [
     meta: { public: true, title: '登录' },
   },
   {
+    path: '/records/:id/report',
+    name: 'record-report',
+    component: () => import('@/views/ReportPrintView.vue'),
+    meta: { title: '质控报告', hidden: true },
+  },
+  {
     path: '/',
     component: () => import('@/layout/MainLayout.vue'),
     redirect: '/dashboard',
     children: [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { title: '质控驾驶舱', icon: 'DataBoard' } },
+      { path: 'workbench', name: 'workbench', component: () => import('@/views/WorkbenchView.vue'), meta: { title: '质控工作台', icon: 'Files' } },
       { path: 'records', name: 'records', component: () => import('@/views/RecordsView.vue'), meta: { title: '病历质控', icon: 'DocumentChecked' } },
       { path: 'records/:id', name: 'record-detail', component: () => import('@/views/RecordDetailView.vue'), meta: { title: '病历详情', hidden: true } },
       { path: 'patients', name: 'patients', component: () => import('@/views/PatientsView.vue'), meta: { title: '患者管理', icon: 'User' } },
@@ -22,7 +29,7 @@ const routes = [
       { path: 'kb', name: 'kb', component: () => import('@/views/KbView.vue'), meta: { title: '知识库问答', icon: 'Collection' } },
       { path: 'agent', name: 'agent', component: () => import('@/views/AgentView.vue'), meta: { title: 'AI 质控助手', icon: 'MagicStick' } },
       { path: 'rules', name: 'rules', component: () => import('@/views/RulesView.vue'), meta: { title: '质控规则', icon: 'SetUp' } },
-      { path: 'logs', name: 'logs', component: () => import('@/views/LogsView.vue'), meta: { title: '操作日志', icon: 'Tickets' } },
+      { path: 'logs', name: 'logs', component: () => import('@/views/LogsView.vue'), meta: { title: '操作日志', icon: 'Tickets', roles: ['admin', 'quality'] } },
       { path: 'users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户管理', icon: 'UserFilled', roles: ['admin'] } },
     ],
   },

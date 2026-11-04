@@ -7,6 +7,13 @@
       </div>
     </div>
 
+    <el-alert type="info" :closable="false" show-icon class="rule-tip">
+      <template #title>
+        规则修改后<strong>下一次质控立即生效</strong>：停用规则不再参与扣分，AI 报告中的该规则问题也会被过滤；
+        权重按默认值比例缩放扣分，严重程度以这里配置为准。
+      </template>
+    </el-alert>
+
     <div class="card">
       <div class="toolbar">
         <el-radio-group v-model="category" size="small">
@@ -14,7 +21,7 @@
           <el-radio-button v-for="c in categories" :key="c.key" :value="c.key">{{ c.label }}</el-radio-button>
         </el-radio-group>
         <div class="spacer" />
-        <span class="muted">共 {{ filtered.length }} 条规则</span>
+        <span class="muted">共 {{ filtered.length }} 条规则 · 命中次数来自近 30 天质控报告</span>
       </div>
 
       <el-table :data="filtered" v-loading="loading">
@@ -33,7 +40,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="weight" label="扣分权重" width="100" align="center" />
-        <el-table-column prop="description" label="规则说明" min-width="240" show-overflow-tooltip />
+        <el-table-column label="近 30 天命中" width="110" align="center">
+          <template #default="{ row }">
+            <span class="hits" :class="{ hot: (usage[row.code] || 0) >= 10 }">{{ usage[row.code] || 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="规则说明" min-width="220" show-overflow-tooltip />
         <el-table-column label="启用" width="90" align="center">
           <template #default="{ row }">
             <el-switch
@@ -84,6 +96,7 @@ const canEdit = computed(() => auth.canQC);
 
 const loading = ref(false);
 const rules = ref<any[]>([]);
+const usage = ref<Record<string, number>>({});
 const category = ref('');
 
 const categories = [
@@ -106,7 +119,9 @@ const form = ref<any>({});
 async function load() {
   loading.value = true;
   try {
-    rules.value = await api.rules();
+    const [list, hits] = await Promise.all([api.rules(), api.ruleUsage().catch(() => ({}))]);
+    rules.value = list;
+    usage.value = hits;
   } finally {
     loading.value = false;
   }
@@ -139,5 +154,9 @@ onMounted(load);
 </script>
 
 <style scoped>
+.rule-tip { margin-bottom: 14px; }
+.rule-tip :deep(.el-alert__content) { font-size: 12.5px; line-height: 1.65; }
 .code { font-size: 11.5px; background: #f1f5f9; padding: 2px 7px; border-radius: 5px; color: var(--ink-700); }
+.hits { display: inline-block; min-width: 34px; padding: 1px 8px; border-radius: 999px; background: #f1f5f9; color: var(--ink-500); font-size: 11.5px; }
+.hits.hot { background: #fff4e5; color: #a86400; font-weight: 700; }
 </style>

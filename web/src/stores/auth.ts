@@ -37,5 +37,10 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('medai_user');
   }
 
-  return { token, user, isLogin, role, isAdmin, canQC, login, refresh, logout };
+  function setToken(next: string) {
+    token.value = next;
+    localStorage.setItem('medai_token', next);
+  }
+
+  return { token, user, isLogin, role, isAdmin, canQC, login, refresh, logout, setToken };
 });

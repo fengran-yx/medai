@@ -83,7 +83,7 @@
           <el-input v-model="pwdForm.oldPassword" type="password" show-password />
         </el-form-item>
         <el-form-item label="新密码">
-          <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="至少 6 位" />
+          <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="至少 8 位，含字母和数字" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -112,8 +112,9 @@ const pwdVisible = ref(false);
 const pwdLoading = ref(false);
 const pwdForm = ref({ oldPassword: '', newPassword: '' });
 
-const menus = [
+const menus = computed(() => [
   { name: 'dashboard', title: '质控驾驶舱', icon: 'DataBoard' },
+  { name: 'workbench', title: '质控工作台', icon: 'Files' },
   { name: 'records', title: '病历质控', icon: 'DocumentChecked' },
   { name: 'patients', title: '患者管理', icon: 'User' },
   { name: 'diagnosis', title: 'AI 辅助诊断', icon: 'FirstAidKit' },
@@ -121,9 +122,9 @@ const menus = [
   { name: 'kb', title: '知识库问答', icon: 'Collection' },
   { name: 'agent', title: 'AI 质控助手', icon: 'MagicStick' },
   { name: 'rules', title: '质控规则', icon: 'SetUp' },
-  { name: 'logs', title: '操作日志', icon: 'Tickets' },
+  ...(auth.canQC ? [{ name: 'logs', title: '操作日志', icon: 'Tickets' }] : []),
   ...(auth.isAdmin ? [{ name: 'users', title: '用户管理', icon: 'UserFilled' }] : []),
-];
+]);
 
 const roleText = computed(
   () => ({ admin: '系统管理员', quality: '质控医师', clinician: '临床医师' }[auth.user?.role as string] || '用户'),
@@ -145,14 +146,15 @@ async function onCommand(cmd: string) {
 }
 
 async function changePwd() {
-  if (!pwdForm.value.newPassword || pwdForm.value.newPassword.length < 6) {
-    ElMessage.warning('新密码至少 6 位');
+  if (!pwdForm.value.newPassword || pwdForm.value.newPassword.length < 8) {
+    ElMessage.warning('新密码至少 8 位，且需同时包含字母和数字');
     return;
   }
   pwdLoading.value = true;
   try {
-    await api.changePassword(pwdForm.value.oldPassword, pwdForm.value.newPassword);
-    ElMessage.success('密码已更新');
+    const res = await api.changePassword(pwdForm.value.oldPassword, pwdForm.value.newPassword);
+    if (res?.token) auth.setToken(res.token);
+    ElMessage.success('密码已更新，其他设备登录已失效');
     pwdVisible.value = false;
   } finally {
     pwdLoading.value = false;

@@ -1,20 +1,34 @@
 <template>
   <div v-if="report" class="qc">
     <div class="qc-head">
-      <div class="score-ring" :class="String(report.level).toLowerCase()">
-        <span class="num">{{ report.score }}</span>
-        <span class="lv">{{ report.level }} 级</span>
+      <div class="score-ring" :class="displayLevel.toLowerCase()">
+        <span class="num">{{ displayScore }}</span>
+        <span class="lv">{{ displayLevel }} 级</span>
       </div>
       <div class="head-main">
         <div class="head-top">
           <span class="tag-ai">✦ AI 质控 · {{ modelName }}</span>
+          <el-tag v-if="isOverridden" size="small" type="warning" effect="dark">人工改判</el-tag>
+          <span v-if="isOverridden" class="ai-origin">AI 初筛 {{ report.score }} 分（{{ report.level }} 级）</span>
           <span class="muted">{{ report.durationMs }} ms</span>
         </div>
         <p class="summary">{{ report.summary }}</p>
+        <p v-if="isOverridden" class="final-note">
+          最终结论：{{ displayScore }} 分（{{ displayLevel }} 级）
+          <span v-if="report.reviewer_name">· 复核人 {{ report.reviewer_name }}</span>
+          <span v-if="report.review_note">· {{ report.review_note }}</span>
+        </p>
         <div class="risk">
           <span class="muted">风险等级：</span>
           <el-tag :type="riskType" size="small" effect="light">{{ riskText }}</el-tag>
           <span class="muted" style="margin-left: 12px">问题 {{ report.issues.length }} 项</span>
+          <span
+            v-if="report.scoreDelta !== null && report.scoreDelta !== undefined && report.scoreDelta !== 0"
+            class="delta"
+            :class="report.scoreDelta > 0 ? 'up' : 'down'"
+          >
+            {{ report.scoreDelta > 0 ? '↑' : '↓' }} {{ isOverridden ? 'AI 初筛较上次' : '较上次' }} {{ report.scoreDelta > 0 ? '+' : '' }}{{ report.scoreDelta }} 分
+          </span>
         </div>
       </div>
     </div>
@@ -36,6 +50,7 @@
           <el-tag :type="sevType(it.severity)" size="small" effect="dark">{{ sevText(it.severity) }}</el-tag>
           <strong>{{ it.rule }}</strong>
           <code v-if="it.ruleCode">{{ it.ruleCode }}</code>
+          <el-tag v-if="changedFields.includes(it.field)" size="small" effect="plain" type="success">本轮已修改</el-tag>
         </div>
         <p class="issue-msg">{{ it.message }}</p>
         <p class="issue-sug">建议：{{ it.suggestion }}</p>
@@ -58,11 +73,23 @@
 import { computed } from 'vue';
 import type { QCReport } from '@/api';
 
-const props = defineProps<{ report: QCReport | null }>();
+const props = withDefaults(defineProps<{ report: QCReport | null; changedFields?: string[] }>(), {
+  changedFields: () => [],
+});
 
 const modelName = computed(() => {
   const m = props.report?.model || '';
   return m.includes('deepseek') ? 'DeepSeek' : '规则引擎';
+});
+
+const isOverridden = computed(() => props.report?.review_status === 'overridden');
+const displayScore = computed(() => {
+  const final = props.report?.final_score;
+  return final === null || final === undefined ? props.report?.score ?? 0 : final;
+});
+const displayLevel = computed(() => {
+  const n = Number(displayScore.value);
+  return n >= 90 ? 'A' : n >= 80 ? 'B' : n >= 60 ? 'C' : 'D';
 });
 
 const dimList = computed(() => {
@@ -101,9 +128,14 @@ const sevType = (s: string) => ({ critical: 'danger', major: 'warning', minor: '
 .score-ring .lv { font-size: 11px; margin-top: 4px; opacity: 0.8; }
 
 .head-main { flex: 1; min-width: 0; }
-.head-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.head-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.ai-origin { font-size: 11.5px; color: var(--ink-500); }
 .summary { margin: 0 0 8px; font-size: 13.5px; line-height: 1.7; color: var(--ink-700); }
+.final-note { margin: 0 0 8px; padding: 6px 9px; border-radius: 7px; background: #fff6ec; color: #8a5a00; font-size: 12px; line-height: 1.7; }
 .risk { display: flex; align-items: center; font-size: 12px; }
+.risk .delta { margin-left: 12px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.risk .delta.up { color: #0b7a52; background: #e7f7ef; }
+.risk .delta.down { color: #c0353a; background: #fdecec; }
 
 .dims { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 24px; margin: 20px 0 6px; }
 .dim-top { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-700); margin-bottom: 5px; }

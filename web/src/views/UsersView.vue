@@ -23,14 +23,25 @@
         <el-table-column label="最近登录" width="160">
           <template #default="{ row }">{{ fmt(row.last_login_at) }}</template>
         </el-table-column>
+        <el-table-column label="安全状态" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="isLocked(row)" type="danger" size="small" effect="dark">已锁定</el-tag>
+            <el-tag v-else-if="Number(row.failed_attempts) > 0" type="warning" size="small" effect="light">
+              失败 {{ row.failed_attempts }} 次
+            </el-tag>
+            <span v-else class="muted">正常</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="isLocked(row)" link type="warning" size="small" @click="unlock(row)">解锁</el-button>
+            <el-button link type="info" size="small" @click="forceLogout(row)">强制下线</el-button>
             <el-button link :type="row.status === 1 ? 'warning' : 'success'" size="small" @click="toggleStatus(row)">
               {{ row.status === 1 ? '停用' : '启用' }}
             </el-button>
@@ -45,7 +56,7 @@
           <el-input v-model="form.username" :disabled="editing" />
         </el-form-item>
         <el-form-item :label="editing ? '重置密码' : '初始密码'" :required="!editing">
-          <el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空则不修改' : '至少 6 位'" />
+          <el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空则不修改；重置后强制下线' : '至少 8 位，含字母和数字'" />
         </el-form-item>
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="角色">
@@ -90,6 +101,7 @@ const form = ref<any>({});
 const fmt = (s: string) => (s ? String(s).slice(0, 16).replace('T', ' ') : '-');
 const roleText = (r: string) => ({ admin: '系统管理员', quality: '质控医师', clinician: '临床医师' }[r] || r);
 const roleType = (r: string) => ({ admin: 'danger', quality: 'warning', clinician: '' }[r] || 'info') as any;
+const isLocked = (row: any) => Boolean(row.locked_until) && new Date(String(row.locked_until).replace(' ', 'T')).getTime() > Date.now();
 
 async function load() {
   loading.value = true;
@@ -119,6 +131,13 @@ async function save() {
     ElMessage.warning('请填写登录名、姓名与密码');
     return;
   }
+  if (form.value.password) {
+    const pw = String(form.value.password);
+    if (pw.length < 8 || pw.length > 64 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+      ElMessage.warning('密码需 8-64 位，且同时包含字母和数字');
+      return;
+    }
+  }
   saving.value = true;
   try {
     if (editing.value) {
@@ -139,6 +158,20 @@ async function toggleStatus(row: any) {
   await ElMessageBox.confirm(`确定要${next ? '启用' : '停用'}用户「${row.name}」吗？`, '提示', { type: 'warning' });
   await api.updateUser(row.id, { status: next });
   ElMessage.success('状态已更新');
+  load();
+}
+
+async function unlock(row: any) {
+  await ElMessageBox.confirm(`解除用户「${row.name}」的登录锁定？`, '解锁账号', { type: 'warning' });
+  await api.updateUser(row.id, { unlock: true });
+  ElMessage.success('账号已解锁');
+  load();
+}
+
+async function forceLogout(row: any) {
+  await ElMessageBox.confirm(`强制「${row.name}」退出所有设备？当前 token 将立即失效。`, '强制下线', { type: 'warning' });
+  await api.updateUser(row.id, { forceLogout: true });
+  ElMessage.success('已强制下线');
   load();
 }
 

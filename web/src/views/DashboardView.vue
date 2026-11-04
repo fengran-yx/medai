@@ -8,7 +8,7 @@
       <el-button :icon="Refresh" circle @click="load" />
     </div>
 
-    <div class="stat-grid">
+    <div class="stat-grid dash-stats">
       <div class="stat">
         <div class="label">患者总数</div>
         <div class="value">{{ overview.patientCount ?? '-' }}<span class="unit">人</span></div>
@@ -36,10 +36,81 @@
         </div>
         <div class="icon"><el-icon><Warning /></el-icon></div>
       </div>
+      <div class="stat clickable" @click="router.push('/workbench')">
+        <div class="label">待复核报告</div>
+        <div class="value" :style="{ color: Number(overview.pendingReviewCount) > 0 ? '#e5484d' : undefined }">
+          {{ overview.pendingReviewCount ?? 0 }}<span class="unit">份</span>
+        </div>
+        <div class="icon"><el-icon><Stamp /></el-icon></div>
+      </div>
+      <div class="stat clickable" @click="router.push('/workbench')">
+        <div class="label">整改逾期</div>
+        <div class="value" :style="{ color: Number(overview.overdueTaskCount) > 0 ? '#e5484d' : undefined }">
+          {{ overview.overdueTaskCount ?? 0 }}<span class="unit">项</span>
+        </div>
+        <div class="icon"><el-icon><Bell /></el-icon></div>
+      </div>
       <div class="stat">
         <div class="label">AI 辅助诊断（30 天）</div>
         <div class="value">{{ overview.aiDiagnosisCount ?? '-' }}<span class="unit">次</span></div>
         <div class="icon"><el-icon><MagicStick /></el-icon></div>
+      </div>
+    </div>
+
+    <div class="loop-grid">
+      <div class="card loop-summary">
+        <div class="loop-title">
+          <h3 class="card-title">质控整改闭环</h3>
+          <span class="muted">近 30 天</span>
+        </div>
+        <div class="loop-stats">
+          <div class="ls">
+            <span>待整改</span>
+            <strong :class="{ danger: rect.pendingCount > 0 }">{{ rect.pendingCount }}<em>份</em></strong>
+          </div>
+          <div class="ls">
+            <span>已完成复评</span>
+            <strong>{{ rect.reviewedCount }}<em>份</em></strong>
+          </div>
+          <div class="ls">
+            <span>整改通过率</span>
+            <strong>{{ rect.closedRate }}<em>%</em></strong>
+          </div>
+          <div class="ls">
+            <span>平均提升</span>
+            <strong :class="rect.avgGain > 0 ? 'ok' : rect.avgGain < 0 ? 'danger' : ''">
+              {{ rect.avgGain > 0 ? '+' : '' }}{{ rect.avgGain }}<em>分</em>
+            </strong>
+          </div>
+        </div>
+        <div class="loop-bar"><i :style="{ width: `${Math.min(100, Math.max(0, rect.closedRate))}%` }" /></div>
+        <p class="loop-tip">
+          每次质控都会留档病历版本；医生按建议修改后重新质控，系统自动计算分数提升与字段变化。
+          通过率 = 最近两轮复评中最新得分 ≥ 80 的比例。
+        </p>
+        <div class="loop-steps">
+          <span>AI 质控</span><i>→</i><span>医师整改</span><i>→</i><span>重新质控</span><i>→</i><span>通过归档</span>
+        </div>
+      </div>
+
+      <div class="card pending-card">
+        <div class="pending-head">
+          <h3 class="card-title">待整改病历</h3>
+          <el-button link type="primary" size="small" @click="router.push({ name: 'records', query: { status: 'qc_failed' } })">查看全部</el-button>
+        </div>
+        <el-table v-if="rect.items.length" :data="rect.items" size="small" height="218" @row-click="(row: any) => router.push(`/records/${row.record_id}`)">
+          <el-table-column prop="patient_name" label="患者" width="82" show-overflow-tooltip />
+          <el-table-column prop="dept_name" label="科室" min-width="90" show-overflow-tooltip />
+          <el-table-column label="评分" width="70">
+            <template #default="{ row }">
+              <span class="score" :class="String(row.level).toLowerCase()">{{ row.score }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="时间" min-width="110">
+            <template #default="{ row }">{{ fmt(row.created_at) }}</template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else description="暂无待整改病历" :image-size="60" />
       </div>
     </div>
 
@@ -84,11 +155,14 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import * as echarts from 'echarts';
 import { Refresh } from '@element-plus/icons-vue';
-import { api } from '@/api';
+import { api, type Rectification } from '@/api';
 
 const router = useRouter();
 const overview = ref<Record<string, any>>({});
 const recent = ref<any[]>([]);
+const rect = ref<Rectification>({
+  pendingCount: 0, reviewedCount: 0, improvedCount: 0, closedCount: 0, closedRate: 0, avgGain: 0, items: [],
+});
 
 const trendRef = ref<HTMLElement>();
 const deptRef = ref<HTMLElement>();
@@ -112,15 +186,17 @@ function getChart(el?: HTMLElement) {
 }
 
 async function load() {
-  const [ov, trend, dept, issues, rc] = await Promise.all([
+  const [ov, trend, dept, issues, rc, loop] = await Promise.all([
     api.overview(),
     api.trends(7),
     api.deptDistribution(),
     api.issueCategories(),
     api.recentQC(),
+    api.rectification(),
   ]);
   overview.value = ov;
   recent.value = rc;
+  rect.value = loop;
 
   const trendChart = getChart(trendRef.value);
   trendChart?.setOption({
@@ -198,10 +274,38 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 16px; }
+.dash-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid-2:last-child { grid-template-columns: 1fr 1.3fr; margin-bottom: 0; }
 .chart { height: 300px; }
 
+.loop-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-bottom: 16px; }
+.stat.clickable { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.stat.clickable:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(15, 23, 42, .1); }
+.loop-title, .pending-head { display: flex; align-items: center; justify-content: space-between; }
+.loop-title :deep(.card-title), .pending-head :deep(.card-title) { margin-bottom: 0; }
+.loop-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 14px; }
+.ls { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: #f7fbfa; border: 1px solid #e6f1ee; border-radius: 9px; }
+.ls span { font-size: 11.5px; color: var(--ink-500); }
+.ls strong { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+.ls strong em { font-size: 11px; font-weight: 500; font-style: normal; color: var(--ink-500); margin-left: 2px; }
+.ls strong.danger { color: var(--danger); }
+.ls strong.ok { color: #0b7a52; }
+.loop-bar { height: 8px; background: #eef3f2; border-radius: 6px; overflow: hidden; }
+.loop-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #2ec4b0, #0f8b7f); transition: width .4s ease; }
+.loop-tip { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-500); }
+.loop-steps { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.loop-steps span { flex: 1; text-align: center; padding: 7px 4px; border-radius: 7px; background: #eef8f5; color: var(--brand-700); font-size: 11.5px; font-weight: 600; }
+.loop-steps i { font-style: normal; color: #94a3b8; font-size: 12px; }
+.pending-head { margin-bottom: 10px; }
+
 @media (max-width: 1200px) {
   .grid-2, .grid-2:last-child { grid-template-columns: 1fr; }
+  .loop-grid { grid-template-columns: 1fr; }
+  .loop-stats { grid-template-columns: repeat(2, 1fr); }
+  .dash-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>

@@ -5,7 +5,7 @@
         <h1 class="page-title">患者管理</h1>
         <p class="page-sub">患者主索引与就诊档案，支持按姓名、病案号、手机号检索</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreate">新增患者</el-button>
+      <el-button v-if="auth.canQC" type="primary" :icon="Plus" @click="openCreate">新增患者</el-button>
     </div>
 
     <div class="card">
@@ -42,7 +42,7 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">档案</el-button>
-            <el-button link size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="auth.canQC" link size="small" @click="openEdit(row)">编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -122,7 +122,9 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Plus, Search } from '@element-plus/icons-vue';
 import { api } from '@/api';
+import { useAuthStore } from '@/stores/auth';
 
+const auth = useAuthStore();
 const loading = ref(false);
 const rows = ref<any[]>([]);
 const total = ref(0);
