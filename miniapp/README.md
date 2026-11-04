@@ -1,6 +1,6 @@
 # 智医质控 MedAI · 微信小程序端
 
-这是现有 Web 平台的 uni-app + Vue 3 小程序端，复用同一套 Node/MySQL 接口。
+这是现有 Web 平台的 uni-app + Vue 3 小程序端，复用同一套 Node/MySQL 接口，覆盖临床闭环、质控管理与 AI 能力。
 
 ![质控工作台](docs/screenshots/workbench.png)
 
@@ -18,7 +18,17 @@
 | 批量质控 | `pages/batch/index` | 批量任务进度轮询、逐份结果 |
 | 质控历史/版本 | `pages/versions/index` | 质控时间线、版本对比、字段 diff |
 | 质控报告 | `pages/report/index` | 原生报告页、分享；打印/PDF 走 Web 端 |
-| 我的 | `pages/me/index` | 当前用户、角色、接口地址、退出登录 |
+| 质控驾驶舱 | `pages/dashboard/index` | 概览、7 天趋势、科室分布、高频问题、整改闭环 |
+| 质控规则 | `pages/rules/index` | 规则列表、启停、权重/严重度调整 |
+| 用户管理 | `pages/users/index` | 账号列表、解锁、强制下线、启停；管理员可见 |
+| 用户编辑 | `pages/user-edit/index` | 新增/编辑用户、重置密码 |
+| 操作日志 | `pages/logs/index` | 审计日志、哈希链完整性校验 |
+| 修改密码 | `pages/password/index` | 修改后当前设备自动续期 |
+| AI 辅助诊断 | `pages/diagnosis/index` | 症状+检查 → 鉴别诊断、检查建议、危险信号 |
+| AI 医学助手 | `pages/assistant/index` | 多轮问答、会话历史 |
+| 知识库问答 | `pages/kb/index` | RAG 检索 + 引用来源 |
+| AI 质控助手 | `pages/agent/index` | Agent 规划、工具调用步骤、最终答复 |
+| 我的 | `pages/me/index` | 当前用户、角色、管理/AI 工具入口、退出登录 |
 
 ## 开发与构建
 

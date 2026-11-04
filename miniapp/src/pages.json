@@ -74,6 +74,22 @@
     {
       "path": "pages/password/index",
       "style": { "navigationBarTitleText": "修改密码" }
+    },
+    {
+      "path": "pages/diagnosis/index",
+      "style": { "navigationBarTitleText": "AI 辅助诊断" }
+    },
+    {
+      "path": "pages/assistant/index",
+      "style": { "navigationBarTitleText": "AI 医学助手" }
+    },
+    {
+      "path": "pages/kb/index",
+      "style": { "navigationBarTitleText": "知识库问答" }
+    },
+    {
+      "path": "pages/agent/index",
+      "style": { "navigationBarTitleText": "AI 质控助手" }
     }
   ],
   "tabBar": {

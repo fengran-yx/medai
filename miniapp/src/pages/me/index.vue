@@ -20,7 +20,7 @@
       </view>
       <view class="item">
         <text class="item-label">客户端</text>
-        <text class="item-value">微信小程序 · P0</text>
+        <text class="item-value">微信小程序 · 完整版</text>
       </view>
     </view>
 
@@ -43,6 +43,29 @@
       <view v-if="isAdmin" class="menu-item" @click="go('/pages/users/index')">
         <text class="menu-icon">用</text>
         <text class="menu-label">用户管理</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+
+    <view class="card menu">
+      <view class="menu-item" @click="go('/pages/diagnosis/index')">
+        <text class="menu-icon">诊</text>
+        <text class="menu-label">AI 辅助诊断</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @click="go('/pages/assistant/index')">
+        <text class="menu-icon">助</text>
+        <text class="menu-label">AI 医学助手</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @click="go('/pages/kb/index')">
+        <text class="menu-icon">知</text>
+        <text class="menu-label">知识库问答（RAG）</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @click="go('/pages/agent/index')">
+        <text class="menu-icon">智</text>
+        <text class="menu-label">AI 质控助手（Agent）</text>
         <text class="menu-arrow">›</text>
       </view>
     </view>

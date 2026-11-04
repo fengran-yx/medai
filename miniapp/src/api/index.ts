@@ -419,4 +419,32 @@ export const api = {
   createUser: (data: any) => request<any>({ url: '/api/users', method: 'POST', data }),
 
   updateUser: (id: number, data: any) => request<any>({ url: `/api/users/${id}`, method: 'PUT', data }),
+
+  aiStatus: () => request<{ remote: boolean; provider: string }>({ url: '/api/ai/status' }),
+
+  diagnosis: (data: any) => request<any>({ url: '/api/ai/diagnosis', method: 'POST', data }),
+
+  chats: () => request<any[]>({ url: '/api/ai/chats' }),
+
+  chatMessages: (id: number) => request<any>({ url: `/api/ai/chats/${id}/messages` }),
+
+  sendChat: (data: { chatId?: number; message: string }) =>
+    request<any>({ url: '/api/ai/chat', method: 'POST', data }),
+
+  deleteChat: (id: number) => request<any>({ url: `/api/ai/chats/${id}`, method: 'DELETE' }),
+
+  kbStats: () => request<{ documents: number; chunks: number; questions: number }>({ url: '/api/kb/stats' }),
+
+  kbDocuments: () => request<any[]>({ url: '/api/kb/documents' }),
+
+  kbAsk: (question: string, topK = 5) =>
+    request<any>({ url: '/api/kb/ask', method: 'POST', data: { question, topK } }),
+
+  agentTools: () => request<any[]>({ url: '/api/agent/tools' }),
+
+  agentRun: (goal: string) => request<any>({ url: '/api/agent/run', method: 'POST', data: { goal } }),
+
+  agentRuns: (limit = 8) => request<any[]>({ url: '/api/agent/runs', data: { limit } }),
+
+  agentRunDetail: (id: number) => request<any>({ url: `/api/agent/runs/${id}` }),
 };

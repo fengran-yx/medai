@@ -162,7 +162,7 @@ onShow(load);
 .desc { display: block; margin-top: 6rpx; color: #64748b; font-size: 21rpx; line-height: 1.6; }
 .foot { margin-top: 12rpx; padding-top: 10rpx; border-top: 1rpx solid #eef2f5; }
 .edit { color: #0f8b7f; font-size: 21rpx; font-weight: 600; }
-.edit-mask { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 50; display: flex; align-items: flex-end; }
+.edit-mask { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(15,23,42,.5); z-index: 50; display: flex; align-items: flex-end; }
 .edit-panel { width: 100%; background: #fff; border-radius: 24rpx 24rpx 0 0; padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom)); }
 .panel-title { display: block; font-size: 30rpx; font-weight: 800; }
 .panel-name { display: block; margin-top: 4rpx; color: #64748b; font-size: 22rpx; }
