@@ -18,7 +18,9 @@
       <button class="wechat-btn" :loading="wechatLoading" @click="wechatLogin">
         微信一键登录
       </button>
-      <text v-if="!wechatConfigured" class="wechat-tip">当前未配置小程序 AppID，微信登录暂不可用，请使用下方账号密码。</text>
+      <text v-if="wechatConfigured === true" class="wechat-tip ok">微信登录已就绪</text>
+      <text v-else-if="wechatConfigured === false" class="wechat-tip">未检测到微信配置，可直接点击尝试；失败会提示原因。</text>
+      <text v-else class="wechat-tip">正在检测微信登录配置…</text>
 
       <view v-if="bindVisible" class="bind-box">
         <text class="bind-title">首次使用，请绑定院内账号</text>
@@ -49,7 +51,7 @@
         </view>
       </view>
 
-      <text class="login-tip">当前使用院内账号登录；微信一键登录需配置小程序 AppID 与服务端换码接口后启用。</text>
+      <text class="login-tip">微信一键登录已接入；首次使用需绑定院内账号。若提示失败，请改用账号密码登录或联系管理员。</text>
     </view>
   </view>
 </template>
@@ -65,7 +67,7 @@ const password = ref('qc123456');
 const loading = ref(false);
 
 const wechatLoading = ref(false);
-const wechatConfigured = ref(false);
+const wechatConfigured = ref<boolean | null>(null);
 const bindVisible = ref(false);
 const bindToken = ref('');
 const bindUsername = ref('');
@@ -96,30 +98,45 @@ function completeLogin(data: { token?: string; user?: any }) {
 }
 
 async function wechatLogin() {
-  if (!wechatConfigured.value) {
-    uni.showToast({ title: '微信登录未配置，请使用账号密码', icon: 'none' });
-    return;
-  }
+  if (wechatLoading.value) return;
   wechatLoading.value = true;
+  uni.showLoading({ title: '微信登录中…', mask: true });
   try {
-    const login: any = await new Promise((resolve, reject) => {
-      uni.login({
-        provider: 'weixin',
-        success: (res: any) => resolve(res),
-        fail: (err: any) => reject(new Error(err?.errMsg || '微信登录失败')),
-      });
-    });
+    console.log('[wx-login] start, configured=', wechatConfigured.value);
+    const login: any = await Promise.race([
+      new Promise((resolve, reject) => {
+        uni.login({
+          provider: 'weixin',
+          success: (res: any) => resolve(res),
+          fail: (err: any) => reject(new Error(err?.errMsg || '微信登录失败')),
+        });
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('wx.login 超时：请确认开发者工具已登录微信，且当前微信号是该小程序开发者')), 8000);
+      }),
+    ]);
+    console.log('[wx-login] code=', login?.code);
     if (!login.code) throw new Error('未获取到微信登录 code');
+    uni.showLoading({ title: '正在登录…', mask: true });
     const data = await api.mpLogin({ code: login.code });
+    console.log('[wx-login] api result=', data);
     if (data.needBind) {
       bindToken.value = data.bindToken || '';
       bindVisible.value = true;
+      uni.hideLoading();
       return;
     }
     completeLogin(data);
   } catch (e: any) {
-    uni.showToast({ title: e.message || '微信登录失败，请使用账号密码', icon: 'none' });
+    console.error('[wx-login] failed', e);
+    uni.hideLoading();
+    uni.showModal({
+      title: '微信登录失败',
+      content: `${e.message || '未知错误'}\n\n可先用下方院内账号密码登录；若反复失败，请把本提示发给管理员。`,
+      showCancel: false,
+    });
   } finally {
+    uni.hideLoading();
     wechatLoading.value = false;
   }
 }
@@ -267,6 +284,10 @@ async function doLogin() {
   color: #94a3b8;
   font-size: 20rpx;
   line-height: 1.6;
+}
+
+.wechat-tip.ok {
+  color: #0b7a52;
 }
 
 .divider {
