@@ -1,4 +1,4 @@
-# 智医质控 MedAI · 微信小程序端（MVP）
+# 智医质控 MedAI · 微信小程序端
 
 这是现有 Web 平台的 uni-app + Vue 3 小程序端，复用同一套 Node/MySQL 接口。
 
@@ -8,10 +8,16 @@
 
 | 页面 | 路径 | 说明 |
 | --- | --- | --- |
-| 登录 | `pages/login/index` | 院内账号密码登录；微信一键登录待接入 AppID |
+| 登录 | `pages/login/index` | 院内账号密码 + 微信一键登录/首次绑定 |
 | 质控工作台 | `pages/workbench/index` | 待复核 / 整改任务 / 逾期统计 |
-| 病历列表 | `pages/records/index` | 搜索、状态筛选、下拉刷新、分页 |
-| 病历详情 | `pages/record-detail/index` | 病历内容、AI 报告、人工复核/改判、整改任务关闭 |
+| 病历列表 | `pages/records/index` | 搜索、状态筛选、批量质控、下拉刷新、分页 |
+| 病历详情 | `pages/record-detail/index` | 病历内容、AI 报告、人工复核/改判、整改提交/关闭 |
+| 病历编辑 | `pages/record-edit/index` | 新建/编辑病历，保存草稿或保存并质控 |
+| 患者管理 | `pages/patients/index` | 患者主索引、搜索、新增患者 |
+| 患者详情 | `pages/patient-detail/index` | 患者信息、就诊记录、新建就诊、建病历 |
+| 批量质控 | `pages/batch/index` | 批量任务进度轮询、逐份结果 |
+| 质控历史/版本 | `pages/versions/index` | 质控时间线、版本对比、字段 diff |
+| 质控报告 | `pages/report/index` | 原生报告页、分享；打印/PDF 走 Web 端 |
 | 我的 | `pages/me/index` | 当前用户、角色、接口地址、退出登录 |
 
 ## 开发与构建
